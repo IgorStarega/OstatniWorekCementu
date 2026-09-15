@@ -1,0 +1,23 @@
+# Sekrety i konfiguracja lokalna — NIGDY nie commituj (§9 PDF: brak haseł, kluczy API i sekretów w repo)
+.env
+.env.local
+.env.*.local
+config/*.local.php
+
+# Logi i pliki tymczasowe / kopie zapasowe
+*.log
+*.tmp
+*.bak
+*~
+
+# Zależności PHP (gdyby w przyszłości doszedł Composer)
+vendor/
+
+# Pliki wrzucane przez użytkowników (np. awatary) — nie do repo
+public/uploads/
+
+# Systemowe i IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
