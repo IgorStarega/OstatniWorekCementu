@@ -1,6 +1,3 @@
-# projekt
-Projekt z przedmiotu TSiAI
-
 # OstatniWorekCementu
 
 System internetowy do obsługi firmy budowlanej oraz rezerwacji usług budowlanych. Aplikacja umożliwia klientom zapoznanie się z ofertą firmy oraz składanie rezerwacji, a pracownikom i administratorom zarządzanie usługami oraz realizowanymi zleceniami.
@@ -12,14 +9,16 @@ System internetowy do obsługi firmy budowlanej oraz rezerwacji usług budowlany
 * [Technologie](#technologie)
 * [Baza danych](#baza-danych)
 * [Role użytkowników](#role-użytkowników)
+* [Dane testowe (Logowanie)](#dane-testowe-logowanie)
 * [Zakres projektu](#zakres-projektu)
 * [Struktura projektu](#struktura-projektu)
 * [Wymagania](#wymagania)
 * [Uruchomienie](#uruchomienie)
 * [Konfiguracja](#konfiguracja)
 * [Bezpieczeństwo](#bezpieczeństwo)
-* [Licencja](#licencja)
+* [Funkcje dodatkowe](#funkcje-dodatkowe)
 * [Autorzy](#autorzy)
+* [Status projektu](#status-projektu)
 
 ---
 
@@ -104,11 +103,7 @@ Baza danych umożliwia między innymi przechowywanie:
 * statusów zleceń,
 * dodatkowych informacji przekazanych przez klienta.
 
-Pliki związane z bazą danych znajdują się w katalogu:
-
-```text
-database/
-```
+Pliki związane z bazą danych znajdują się w katalogu: `database/`
 
 ---
 
@@ -122,17 +117,7 @@ Klient korzysta z publicznej części serwisu oraz może dokonywać rezerwacji u
 
 Przykładowe możliwości:
 
-```text
-Przeglądanie usług
-       ↓
-Wybór usługi
-       ↓
-Wybór terminu
-       ↓
-Podanie informacji o zleceniu
-       ↓
-Utworzenie rezerwacji
-```
+> Przeglądanie usług ➔ Wybór usługi ➔ Wybór terminu ➔ Podanie informacji o zleceniu ➔ Utworzenie rezerwacji
 
 ### Pracownik
 
@@ -141,6 +126,25 @@ Pracownik odpowiada za realizację zleceń oraz obsługę powierzonych mu usług
 ### Administrator
 
 Administrator posiada rozszerzone uprawnienia pozwalające na zarządzanie systemem, użytkownikami, usługami oraz rezerwacjami.
+
+---
+
+## Dane testowe (Logowanie)
+
+Aby ułatwić testowanie systemu, baza danych została zasilona przykładowymi użytkownikami. Hasło dla wszystkich kont testowych (zhashowane w bazie) to: **Haslo123!**
+
+**Konto Administratora:**
+* **Email:** `admin@ostatniworekcementu.pl` (Administrator Systemu)
+
+**Konta Pracowników:**
+* **Email:** `jan.kowalski@example.com` (Jan Kowalski)
+* **Email:** `piotr.nowak@example.com` (Piotr Nowak)
+* **Email:** `adam.wisniewski@example.com` (Adam Wiśniewski)
+* **Email:** `marek.wojcik@example.com` (Marek Wójcik)
+
+**Konta Klientów:**
+* **Email:** `anna.kowalska@example.com` (Anna Kowalska)
+* **Email:** `tomasz.zielinski@example.com` (Tomasz Zieliński)
 
 ---
 
@@ -184,47 +188,28 @@ Projekt obejmuje stworzenie kompletnego systemu wspierającego obsługę firmy b
 
 Główna struktura repozytorium:
 
-```text
-OstatniWorekCementu/
-│
-├── app/
-│   └── ...
-│
-├── config/
-│   └── ...
-│
-├── database/
-│   └── ...
-│
-├── docs/
-│   └── ...
-│
-├── public/
-│   └── ...
-│
-├── .gitignore
-├── LICENSE
-└── README.md
-```
+> OstatniWorekCementu/
+> ├── app/
+> ├── config/
+> ├── database/
+> ├── docs/
+> ├── public/
+> ├── .gitignore
+> └── README.md
 
 ### `app/`
-
 Główna część aplikacji zawierająca logikę systemu.
 
 ### `config/`
-
 Pliki konfiguracyjne aplikacji.
 
 ### `database/`
-
 Pliki związane ze strukturą oraz inicjalizacją bazy danych.
 
 ### `docs/`
-
 Dokumentacja techniczna oraz materiały związane z projektem.
 
 ### `public/`
-
 Publicznie dostępna część aplikacji, z której korzysta użytkownik.
 
 ---
@@ -246,46 +231,25 @@ Przed rozpoczęciem pracy należy upewnić się, że środowisko posiada:
 
 ### 1. Klonowanie repozytorium
 
-```bash
-git clone https://github.com/IgorStarega/OstatniWorekCementu.git
-cd OstatniWorekCementu
-```
+Polecenie w terminalu:
+`git clone [https://github.com/IgorStarega/OstatniWorekCementu.git](https://github.com/IgorStarega/OstatniWorekCementu.git)`
+`cd OstatniWorekCementu`
 
 ### 2. Konfiguracja bazy danych
 
-Utwórz bazę danych zgodnie z plikami znajdującymi się w katalogu:
-
-```text
-database/
-```
-
-Następnie skonfiguruj połączenie aplikacji z bazą danych w plikach znajdujących się w:
-
-```text
-config/
-```
+Utwórz bazę danych zgodnie z plikami znajdującymi się w katalogu: `database/`
+Następnie skonfiguruj połączenie aplikacji z bazą danych w plikach znajdujących się w: `config/`
 
 ### 3. Uruchomienie serwera
 
-Uruchom serwer WWW oraz bazę danych.
-
-Następnie skieruj katalog główny serwera na katalog:
-
-```text
-public/
-```
-
+Uruchom serwer WWW oraz bazę danych. Następnie skieruj katalog główny serwera na katalog: `public/`
 Po uruchomieniu aplikacja powinna być dostępna pod lokalnym adresem skonfigurowanym dla środowiska.
 
 ---
 
 ## Konfiguracja
 
-Konfiguracja aplikacji znajduje się w katalogu:
-
-```text
-config/
-```
+Konfiguracja aplikacji znajduje się w katalogu: `config/`
 
 Przed uruchomieniem systemu należy skonfigurować między innymi:
 
@@ -313,15 +277,13 @@ Podczas wdrażania aplikacji w środowisku produkcyjnym należy zadbać między 
 
 ---
 
-## Licencja
+## Funkcje dodatkowe
 
-Projekt jest dostępny na licencji **MIT**.
-
-Szczegółowe informacje znajdują się w pliku:
-
-```text
-LICENSE
-```
+W ramach rozszerzenia podstawowej funkcjonalności systemu wdrożone zostaną następujące rozwiązania:
+* **Rozbudowana architektura bazy danych:** Wdrożenie mechanizmu "zamrożenia" ceny usługi w tabeli rezerwacji (odporność na zmianę cennika w czasie).
+* **Wyszukiwanie i paginacja:** Ułatwione przeglądanie większych list (np. rezerwacji, usług czy użytkowników) w panelu administratora.
+* **AJAX i dynamiczne pobieranie terminów:** Płynne ładowanie dostępnych godzin pracy pracownika bez przeładowywania całej strony podczas wyboru usługi.
+* **Historia zmian statusów:** Rejestrowanie logów i operacji zmiany statusu rezerwacji dokonywanych przez pracowników i administratorów.
 
 ---
 
