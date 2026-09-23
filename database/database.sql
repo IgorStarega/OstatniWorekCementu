@@ -30,7 +30,7 @@ INSERT INTO service_categories (name, description) VALUES
 -- =========================================
 
 INSERT INTO services
-(category_id, name, description, duration, price, active)
+(category_id, name, description, duration_minutes, price, is_active)
 VALUES
 
 (1,
@@ -38,84 +38,84 @@ VALUES
  'Murowanie ścian z cegły, pustaków lub bloczków.',
  480,
  1200.00,
- TRUE),
+ 1),
 
 (1,
  'Tynkowanie',
  'Tynkowanie ścian wewnętrznych i zewnętrznych.',
  360,
  900.00,
- TRUE),
+ 1),
 
 (2,
  'Układanie płytek',
  'Układanie płytek ceramicznych i gresowych.',
  240,
  650.00,
- TRUE),
+ 1),
 
 (2,
  'Układanie paneli',
  'Montaż paneli podłogowych.',
  240,
  500.00,
- TRUE),
+ 1),
 
 (3,
  'Malowanie ścian',
  'Malowanie ścian wewnętrznych.',
  240,
  450.00,
- TRUE),
+ 1),
 
 (3,
  'Malowanie sufitów',
  'Malowanie sufitów farbami przeznaczonymi do wnętrz.',
  180,
  350.00,
- TRUE),
+ 1),
 
 (4,
  'Ocieplanie budynku',
  'Wykonanie ocieplenia budynku.',
  480,
  1800.00,
- TRUE),
+ 1),
 
 (4,
  'Wykonanie elewacji',
  'Kompleksowe wykonanie elewacji budynku.',
  480,
  2000.00,
- TRUE),
+ 1),
 
 (5,
  'Remont łazienki',
  'Kompleksowy remont łazienki.',
  480,
  2500.00,
- TRUE),
+ 1),
 
 (5,
  'Wykonanie posadzki',
  'Wykonanie i przygotowanie posadzki.',
  360,
  1000.00,
- TRUE),
+ 1),
 
 (6,
  'Montaż drzwi',
  'Montaż drzwi wewnętrznych i zewnętrznych.',
  180,
  400.00,
- TRUE),
+ 1),
 
 (6,
  'Montaż okien',
  'Montaż okien wraz z przygotowaniem otworu.',
  240,
  600.00,
- TRUE);
+ 1);
 
 
 -- =========================================
@@ -123,64 +123,64 @@ VALUES
 -- =========================================
 
 INSERT INTO users
-(name, surname, email, password, phone, role, active)
+(first_name, last_name, email, password, phone, role, is_active)
 VALUES
 
 ('Jan',
  'Kowalski',
  'jan.kowalski@example.com',
- 'TEST_PASSWORD_1',
+ '$2y$10$e8O4C6XG9J1mS6V8Qz3Y1u9R1D.sO/xZ/aK/8Y/0y1K/4B/6Y/2bC',
  '500600700',
- 'employee',
- TRUE),
+ 'pracownik',
+ 1),
 
 ('Piotr',
  'Nowak',
  'piotr.nowak@example.com',
- 'TEST_PASSWORD_2',
+ '$2y$10$e8O4C6XG9J1mS6V8Qz3Y1u9R1D.sO/xZ/aK/8Y/0y1K/4B/6Y/2bC',
  '501601701',
- 'employee',
- TRUE),
+ 'pracownik',
+ 1),
 
 ('Adam',
  'Wiśniewski',
  'adam.wisniewski@example.com',
- 'TEST_PASSWORD_3',
+ '$2y$10$e8O4C6XG9J1mS6V8Qz3Y1u9R1D.sO/xZ/aK/8Y/0y1K/4B/6Y/2bC',
  '502602702',
- 'employee',
- TRUE),
+ 'pracownik',
+ 1),
 
 ('Marek',
  'Wójcik',
  'marek.wojcik@example.com',
- 'TEST_PASSWORD_4',
+ '$2y$10$e8O4C6XG9J1mS6V8Qz3Y1u9R1D.sO/xZ/aK/8Y/0y1K/4B/6Y/2bC',
  '503603703',
- 'employee',
- TRUE),
+ 'pracownik',
+ 1),
 
 ('Anna',
  'Kowalska',
  'anna.kowalska@example.com',
- 'TEST_PASSWORD_5',
+ '$2y$10$e8O4C6XG9J1mS6V8Qz3Y1u9R1D.sO/xZ/aK/8Y/0y1K/4B/6Y/2bC',
  '504604704',
- 'client',
- TRUE),
+ 'klient',
+ 1),
 
 ('Tomasz',
  'Zieliński',
  'tomasz.zielinski@example.com',
- 'TEST_PASSWORD_6',
+ '$2y$10$e8O4C6XG9J1mS6V8Qz3Y1u9R1D.sO/xZ/aK/8Y/0y1K/4B/6Y/2bC',
  '505605705',
- 'client',
- TRUE),
+ 'klient',
+ 1),
 
 ('Administrator',
  'Systemu',
  'admin@ostatniworekcementu.pl',
- 'TEST_PASSWORD_ADMIN',
+ '$2y$10$e8O4C6XG9J1mS6V8Qz3Y1u9R1D.sO/xZ/aK/8Y/0y1K/4B/6Y/2bC',
  '506606706',
  'admin',
- TRUE);
+ 1);
 
 
 -- =========================================
@@ -188,24 +188,24 @@ VALUES
 -- =========================================
 
 INSERT INTO employees
-(user_id, description, active)
+(user_id, description, is_active)
 VALUES
 
 (1,
  'Murarz i tynkarz z doświadczeniem w pracach konstrukcyjnych.',
- TRUE),
+ 1),
 
 (2,
  'Specjalista od układania płytek i prac wykończeniowych.',
- TRUE),
+ 1),
 
 (3,
  'Malarz zajmujący się malowaniem ścian i sufitów.',
- TRUE),
+ 1),
 
 (4,
  'Specjalista od elewacji oraz ocieplania budynków.',
- TRUE);
+ 1);
 
 
 -- =========================================
@@ -282,7 +282,7 @@ VALUES
 -- =========================================
 
 INSERT INTO reservations
-(user_id, employee_id, service_id, reservation_date,
+(user_id, employee_id, service_id, final_price, reservation_date,
  start_time, end_time, status, comment)
 VALUES
 
@@ -290,10 +290,11 @@ VALUES
  5,
  2,
  3,
+ 650.00,
  '2026-10-05',
  '09:00:00',
  '13:00:00',
- 'confirmed',
+ 'potwierdzona',
  'Układanie płytek w łazience, około 12 m2.'
 ),
 
@@ -301,10 +302,11 @@ VALUES
  6,
  1,
  1,
+ 1200.00,
  '2026-10-07',
  '08:00:00',
  '16:00:00',
- 'pending',
+ 'oczekująca',
  'Murowanie ściany działowej.'
 ),
 
@@ -312,10 +314,11 @@ VALUES
  5,
  3,
  5,
+ 450.00,
  '2026-10-12',
  '08:00:00',
  '12:00:00',
- 'confirmed',
+ 'potwierdzona',
  'Malowanie salonu i przedpokoju.'
 ),
 
@@ -323,9 +326,10 @@ VALUES
  6,
  4,
  7,
+ 1800.00,
  '2026-10-15',
  '07:00:00',
  '15:00:00',
- 'pending',
+ 'oczekująca',
  'Ocieplenie budynku jednorodzinnego.'
 );
