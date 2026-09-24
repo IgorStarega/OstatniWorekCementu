@@ -7,6 +7,12 @@
 -- Wersja serwera: 8.0.46
 -- Wersja PHP: 8.3.26
 
+-- Plik odtwarza bazę od zera: tworzy bazę `budowlanka_rezerwacje`
+-- i całą strukturę (7 tabel, klucze, indeksy). Bez danych testowych.
+CREATE DATABASE IF NOT EXISTS `budowlanka_rezerwacje`
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE `budowlanka_rezerwacje`;
+
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
@@ -158,7 +164,9 @@ ALTER TABLE `reservations`
   ADD PRIMARY KEY (`id`),
   ADD KEY `user_id` (`user_id`),
   ADD KEY `employee_id` (`employee_id`),
-  ADD KEY `service_id` (`service_id`);
+  ADD KEY `service_id` (`service_id`),
+  ADD KEY `reservation_date` (`reservation_date`),
+  ADD KEY `status` (`status`);
 
 --
 -- Indeksy dla tabeli `services`
