@@ -10,6 +10,8 @@
         <h1>System Rezerwacji Usług Budowlanych</h1>
         <nav>
             <a href="/?page=home">Strona główna</a>
+            <a href="/?page=login">Logowanie</a>
+            <a href="/?page=register">Rejestracja</a>
         </nav>
     </header>
     <main>
