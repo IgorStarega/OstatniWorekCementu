@@ -10,8 +10,13 @@
         <h1>System Rezerwacji Usług Budowlanych</h1>
         <nav>
             <a href="/?page=home">Strona główna</a>
-            <a href="/?page=login">Logowanie</a>
-            <a href="/?page=register">Rejestracja</a>
+            <?php if (!empty($_SESSION['user_id'])): ?>
+                <span>Zalogowano jako: <strong><?= htmlspecialchars($_SESSION['user']['first_name'] ?? 'Użytkownik', ENT_QUOTES, 'UTF-8') ?></strong> (<?= htmlspecialchars($_SESSION['role'] ?? 'klient', ENT_QUOTES, 'UTF-8') ?>)</span>
+                <a href="/?page=logout">Wyloguj się</a>
+            <?php else: ?>
+                <a href="/?page=login">Logowanie</a>
+                <a href="/?page=register">Rejestracja</a>
+            <?php endif; ?>
         </nav>
     </header>
     <main>

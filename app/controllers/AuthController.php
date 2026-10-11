@@ -11,13 +11,22 @@ class AuthController
 
     public function login(): void
     {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+
+        if (!empty($_SESSION['user_id'])) {
+            header('Location: /?page=home');
+            exit;
+        }
+
         $pageTitle = 'Logowanie';
         $errors = [];
         $email = '';
         $message = '';
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $email = trim($this->postString('email'));
+            $email = mb_strtolower(trim($this->postString('email')));
             $password = $this->postString('password');
 
             if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 100) {
@@ -29,16 +38,26 @@ class AuthController
 
             if ($errors === []) {
                 $user = $this->getUsers()->findByEmail($email);
+                // Weryfikacja hasła za pomocą password_verify() i sprawdzenie aktywności konta
                 if ($user && (int) $user['is_active'] === 1 && password_verify($password, $user['password'])) {
                     if (session_status() !== PHP_SESSION_ACTIVE) {
                         session_start();
                     }
                     session_regenerate_id(true);
+
+                    // Zapisanie w tablicy $_SESSION kluczowych danych: user_id oraz role (bez hasła!)
+                    $_SESSION['user_id'] = (int) $user['id'];
+                    $_SESSION['role'] = $user['role'];
                     $_SESSION['user'] = [
-                        'id' => (int) $user['id'],
-                        'role' => $user['role'],
+                        'id'         => (int) $user['id'],
+                        'first_name' => $user['first_name'],
+                        'last_name'  => $user['last_name'],
+                        'email'      => $user['email'],
+                        'role'       => $user['role'],
                     ];
-                    $message = 'Zalogowano poprawnie.';
+
+                    header('Location: /?page=home');
+                    exit;
                 } else {
                     $errors[] = 'Nieprawidłowy e-mail lub hasło.';
                 }
@@ -50,13 +69,18 @@ class AuthController
         require BASE_PATH . '/app/views/layout/footer.php';
     }
 
+    public function logout(): void
+    {
+        require BASE_PATH . '/public/logout.php';
+    }
+
     public function register(): void
     {
         if (session_status() !== PHP_SESSION_ACTIVE) {
             session_start();
         }
 
-        if (!empty($_SESSION['user'])) {
+        if (!empty($_SESSION['user_id']) || !empty($_SESSION['user'])) {
             header('Location: /?page=home');
             exit;
         }
