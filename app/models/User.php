@@ -28,18 +28,20 @@ class User
         string $lastName,
         string $email,
         string $phone,
-        string $passwordHash
+        string $passwordHash,
+        string $role = 'klient'
     ): int {
         $statement = $this->pdo->prepare(
-            'INSERT INTO users (first_name, last_name, email, phone, password)
-             VALUES (:first_name, :last_name, :email, :phone, :password)'
+            'INSERT INTO users (first_name, last_name, email, phone, password, role)
+             VALUES (:first_name, :last_name, :email, :phone, :password, :role)'
         );
         $statement->execute([
             'first_name' => $firstName,
-            'last_name' => $lastName,
-            'email' => $email,
-            'phone' => $phone,
-            'password' => $passwordHash,
+            'last_name'  => $lastName,
+            'email'      => $email,
+            'phone'      => $phone,
+            'password'   => $passwordHash,
+            'role'       => $role,
         ]);
 
         return (int) $this->pdo->lastInsertId();
