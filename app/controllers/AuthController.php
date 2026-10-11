@@ -52,6 +52,15 @@ class AuthController
 
     public function register(): void
     {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+
+        if (!empty($_SESSION['user'])) {
+            header('Location: /?page=home');
+            exit;
+        }
+
         $pageTitle = 'Rejestracja';
         $errors = [];
         $firstName = '';
@@ -63,25 +72,29 @@ class AuthController
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $firstName = trim($this->postString('first_name'));
             $lastName = trim($this->postString('last_name'));
-            $email = trim($this->postString('email'));
+            $email = mb_strtolower(trim($this->postString('email')));
             $phone = trim($this->postString('phone'));
             $password = $this->postString('password');
             $passwordConfirmation = $this->postString('password_confirmation');
 
-            if ($firstName === '' || mb_strlen($firstName) > 50) {
-                $errors[] = 'Imię jest wymagane i może mieć maksymalnie 50 znaków.';
+            // Backendowa walidacja danych wejściowych — nigdy nie ufamy danym z frontendu
+            if ($firstName === '' || mb_strlen($firstName) < 2 || mb_strlen($firstName) > 50) {
+                $errors[] = 'Imię jest wymagane (od 2 do 50 znaków).';
             }
-            if ($lastName === '' || mb_strlen($lastName) > 50) {
-                $errors[] = 'Nazwisko jest wymagane i może mieć maksymalnie 50 znaków.';
+            if ($lastName === '' || mb_strlen($lastName) < 2 || mb_strlen($lastName) > 50) {
+                $errors[] = 'Nazwisko jest wymagane (od 2 do 50 znaków).';
             }
             if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 100) {
                 $errors[] = 'Podaj poprawny adres e-mail (maksymalnie 100 znaków).';
             }
-            if ($phone === '' || mb_strlen($phone) > 20) {
-                $errors[] = 'Numer telefonu jest wymagany (maksymalnie 20 znaków).';
+            if ($phone === '' || !preg_match('/^\+?[0-9\s\-]{7,20}$/', $phone)) {
+                $errors[] = 'Podaj poprawny numer telefonu (od 7 do 20 znaków, dopuszczalne cyfry, spacje, myślniki i znak +).';
             }
             if (strlen($password) < 8) {
                 $errors[] = 'Hasło musi mieć co najmniej 8 znaków.';
+            }
+            if (strlen($password) > 72) {
+                $errors[] = 'Hasło może mieć maksymalnie 72 znaki.';
             }
             if ($password !== $passwordConfirmation) {
                 $errors[] = 'Hasła nie są takie same.';
@@ -89,19 +102,28 @@ class AuthController
 
             if ($errors === []) {
                 $users = $this->getUsers();
+                // Sprawdzenie, czy podany adres e-mail już istnieje w bazie (zapobieganie błędom SQL)
                 if ($users->findByEmail($email)) {
                     $errors[] = 'Konto z tym adresem e-mail już istnieje.';
                 } else {
                     try {
+                        // Zapis hasła do bazy wyłącznie przy użyciu password_hash(), z rolą klient
                         $users->create(
                             $firstName,
                             $lastName,
                             $email,
                             $phone,
-                            password_hash($password, PASSWORD_DEFAULT)
+                            password_hash($password, PASSWORD_DEFAULT),
+                            'klient'
                         );
                         $message = 'Konto utworzone. Możesz się teraz zalogować.';
+                        // Wyczyszczenie formularza po pomyślnym utworzeniu konta
+                        $firstName = '';
+                        $lastName = '';
+                        $email = '';
+                        $phone = '';
                     } catch (PDOException $exception) {
+                        // Bezpieczna obsługa naruszenia unikalności (np. wyścig zapytań)
                         if ($exception->getCode() === '23000') {
                             $errors[] = 'Konto z tym adresem e-mail już istnieje.';
                         } else {
