@@ -3,6 +3,10 @@
 
 define('BASE_PATH', dirname(__DIR__));
 
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
+
 $config = require BASE_PATH . '/config/config.php';
 
 require BASE_PATH . '/app/controllers/HomeController.php';
@@ -27,6 +31,10 @@ switch ($page) {
 
     case 'register':
         (new AuthController($config))->register();
+        break;
+
+    case 'logout':
+        (new AuthController($config))->logout();
         break;
 
     default:
