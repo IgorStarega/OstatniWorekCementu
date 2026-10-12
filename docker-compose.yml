@@ -61,7 +61,7 @@ services:
     container_name: phpmyadmin
     restart: unless-stopped
     ports:
-      - "8081:80"
+      - "8084:80"
     depends_on:
       - db
     environment:
