@@ -16,8 +16,14 @@ vendor/
 # Pliki wrzucane przez użytkowników (np. awatary) — nie do repo
 public/uploads/
 
+# Docker — lokalne nadpisania compose i dane spoza repo (nie do repo)
+# NOTE: .env.example MA być commitowany (wzór), ignorowany jest tylko .env powyżej.
+docker-compose.override.yml
+docker-compose.*.override.yml
+
 # Systemowe i IDE
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+themes/
