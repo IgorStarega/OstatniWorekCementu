@@ -1,0 +1,30 @@
+# Kontekst buildu — Dockerfile (docker/php/Dockerfile) potrzebuje
+# z niego tylko docker/php/000-default.conf. Reszta jest zbędna:
+# kod aplikacji i baza są montowane jako wolumeny w compose.
+.git/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Sekrety i konfiguracja lokalna
+.env*
+config/*.local.php
+docker-compose.override.yml
+docker-compose.*.override.yml
+
+# Logi, kopie zapasowe, zależności
+*.log
+*.tmp
+*.bak
+*~
+vendor/
+
+# Duże/zbędne w obrazie: zrzuty bazy, docs, motyw PMA, uploady, grafiki
+database/
+docs/
+themes/
+public/uploads/
+*.jpg
+*.md
+LICENSE
