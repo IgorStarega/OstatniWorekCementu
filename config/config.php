@@ -12,5 +12,7 @@ return [
     ],
     'app' => [
         'name' => 'System Rezerwacji Usług Budowlanych',
+        // 'local' (domyślnie) albo 'prod' — w prod włączane jest cookie_secure.
+        'env'  => getenv('APP_ENV') ?: 'local',
     ],
 ];

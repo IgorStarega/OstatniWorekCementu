@@ -3,11 +3,26 @@
 
 define('BASE_PATH', dirname(__DIR__));
 
+$config = require BASE_PATH . '/config/config.php';
+
+// Spójna strefa czasowa całej aplikacji (zgodna z TZ kontenerów: Europe/Warsaw).
+date_default_timezone_set('Europe/Warsaw');
+
+// Hartowanie sesji — musi trafić przed pierwszym session_start().
+// use_strict_mode blokuje przyjmowanie nieznanych identyfikatorów sesji,
+// httponly ukrywa ciasteczko przed JS, samesite ogranicza wysyłanie w CSRF.
+ini_set('session.use_strict_mode', '1');
+ini_set('session.cookie_httponly', '1');
+ini_set('session.cookie_samesite', 'Lax');
+
+// Ciasteczko session tylko po HTTPS i wyłącznie w środowisku produkcyjnym.
+if (($config['app']['env'] ?? 'local') === 'prod') {
+    ini_set('session.cookie_secure', '1');
+}
+
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
-
-$config = require BASE_PATH . '/config/config.php';
 
 require BASE_PATH . '/app/controllers/HomeController.php';
 require BASE_PATH . '/app/models/Database.php';
