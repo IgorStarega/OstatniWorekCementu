@@ -24,6 +24,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
+require BASE_PATH . '/app/helpers/csrf.php';
 require BASE_PATH . '/app/controllers/HomeController.php';
 require BASE_PATH . '/app/models/Database.php';
 require BASE_PATH . '/app/models/User.php';

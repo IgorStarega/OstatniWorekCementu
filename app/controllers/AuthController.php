@@ -26,6 +26,8 @@ class AuthController
         $message = '';
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            csrf_verify($this->postString('csrf_token'));
+
             $email = mb_strtolower(trim($this->postString('email')));
             $password = $this->postString('password');
 
@@ -71,6 +73,15 @@ class AuthController
 
     public function logout(): void
     {
+        // Wylogowanie wyłącznie metodą POST i z poprawnym tokenem CSRF.
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            header('Allow: POST');
+            exit;
+        }
+
+        csrf_verify($this->postString('csrf_token'));
+
         require BASE_PATH . '/public/logout.php';
     }
 
@@ -94,6 +105,8 @@ class AuthController
         $message = '';
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            csrf_verify($this->postString('csrf_token'));
+
             $firstName = trim($this->postString('first_name'));
             $lastName = trim($this->postString('last_name'));
             $email = mb_strtolower(trim($this->postString('email')));
