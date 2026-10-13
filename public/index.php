@@ -68,7 +68,7 @@ switch ($page) {
         http_response_code(404);
         $pageTitle = 'Nie znaleziono strony';
         require BASE_PATH . '/app/views/layout/header.php';
-        echo '<h2>404</h2><p>Nie znaleziono strony.</p>';
+        require BASE_PATH . '/app/views/errors/404.php';
         require BASE_PATH . '/app/views/layout/footer.php';
         break;
 }
