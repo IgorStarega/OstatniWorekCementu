@@ -1,13 +1,37 @@
 <?php
 // Konfiguracja aplikacji. Dane dostępowe wyłącznie ze zmiennych środowiskowych
-// (nigdy nie wpisuj tu prawdziwych haseł). Lokalne wartości domyślne poniżej.
+// (nigdy nie wpisuj tu prawdziwych haseł). Wartości ustawiamy w pliku .env —
+// wzorem jest .env.example (domyślnie użytkownik app / hasło app123).
+// Brak wymaganej zmiennej kończy się jasnym wyjątkiem zamiast cichego połączenia.
+
+$required = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASS'];
+$missing = [];
+$values = [];
+
+foreach ($required as $name) {
+    $value = getenv($name);
+    if ($value === false || $value === '') {
+        $missing[] = $name;
+    } else {
+        $values[$name] = $value;
+    }
+}
+
+if ($missing !== []) {
+    throw new RuntimeException(
+        'Brak wymaganych zmiennych środowiskowych bazy danych: ' . implode(', ', $missing)
+        . '. Skopiuj plik .env.example do .env (cp .env.example .env) i ustaw '
+        . 'DB_HOST, DB_NAME, DB_USER oraz DB_PASS (domyślnie app / app123).'
+    );
+}
+
 return [
     'db' => [
-        'host'    => getenv('DB_HOST') ?: 'db',
+        'host'    => $values['DB_HOST'],
         'port'    => getenv('DB_PORT') ?: '3306',
-        'name'    => getenv('DB_NAME') ?: 'budowlanka_rezerwacje',
-        'user'    => getenv('DB_USER') ?: 'root',
-        'pass'    => getenv('DB_PASS') ?: '',
+        'name'    => $values['DB_NAME'],
+        'user'    => $values['DB_USER'],
+        'pass'    => $values['DB_PASS'],
         'charset' => 'utf8mb4',
     ],
     'app' => [
