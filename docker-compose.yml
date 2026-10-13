@@ -1,55 +1,54 @@
 # OstatniWorekCementu — środowisko lokalne (PHP + Apache + MySQL + phpMyAdmin).
 # Start: docker compose up -d --build
-# Aplikacja: http://localhost:8082/  (przekierowuje na /?page=home)
-# phpMyAdmin: http://localhost:8081/ (root / hasło z MYSQL_ROOT_PASSWORD)
+# Aplikacja:    http://localhost:8082/  (przekierowuje na /?page=home)
+# phpMyAdmin:   http://localhost:8084/  (root / hasło z MYSQL_ROOT_PASSWORD)
 #
-# Dane dostępowe są w .env (jest w .gitignore — nie commituj go).
-# Najpierw skopiuj przykład:  cp .env.example .env
-# Bez pliku .env działają wartości domyślne z ${VAR:-...} poniżej.
-# NOTE: nie uruchamiaj równolegle drugiego stosu z tego szablonu
-# (zajmuje te same nazwy kontenerów db/phpmyadmin/app oraz porty 3306 i 8081).
+# Cała konfiguracja i sekrety są w .env (pliku .env nie commitujemy).
+# Najpierw skopiuj wzór:   cp .env.example .env
+# Porty publikowane są domyślnie tylko na interfejsie lokalnym (BIND_ADDR).
+#
+# Nazwy kontenerów mają prefiks owc-, bo container_name jest globalny —
+# chroni to przed kolizją z innymi stosami (np. db/phpmyadmin/apache na Azure).
 
 services:
   app:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
-    container_name: app
+    container_name: owc-app
     restart: unless-stopped
     ports:
-      - "8082:80"
+      - "${BIND_ADDR:-127.0.0.1}:8082:80"
+    env_file:
+      - .env
+    environment:
+      # Strefa czasowa (wartość ze .env, stała i niewrażliwa).
+      TZ: ${TZ:-Europe/Warsaw}
     volumes:
       - .:/var/www/html
     depends_on:
       db:
         condition: service_healthy
-    environment:
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_NAME: ${MYSQL_DATABASE:-budowlanka_rezerwacje}
-      DB_USER: ${MYSQL_USER:-app}
-      DB_PASS: ${MYSQL_PASSWORD:-app123}
     networks:
       - web-network
 
   db:
     image: mysql:8.0
-    container_name: db
+    container_name: owc-db
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-budowlanka_rezerwacje}
-      MYSQL_USER: ${MYSQL_USER:-app}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-app123}
-    ports:
-      - "3306:3306"
+      TZ: ${TZ:-Europe/Warsaw}
     volumes:
-      - mysql_data:/var/lib/mysql
-      - ./config/mysql:/etc/mysql/conf.d
-      # Pełny zrzut (struktura + dane testowe, hasło: Haslo123!) ładuje się przy pierwszym starcie.
+      # Bind mount zamiast named volume — dane leżą w repo/data/mysql (w .gitignore).
+      - ./data/mysql:/var/lib/mysql
+      - ./config/mysql:/etc/mysql/conf.d:ro
+      # Pełny zrzut (struktura + dane testowe, hasło: Haslo123!) ładowany przy pierwszym starcie.
       - ./database/database.sql:/docker-entrypoint-initdb.d/01-database.sql:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root123}"]
+      # Hasło czytane ze zmiennej kontenera (brak sekretu inline).
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -58,27 +57,16 @@ services:
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
-    container_name: phpmyadmin
+    container_name: owc-phpmyadmin
     restart: unless-stopped
     ports:
-      - "8084:80"
+      - "${BIND_ADDR:-127.0.0.1}:8084:80"
+    env_file:
+      - .env
     depends_on:
       - db
-    environment:
-      PMA_HOST: db
-      PMA_PORT: 3306
-      # Zmiana na roota, aby mieć pełne uprawnienia
-      PMA_USER: root
-      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
-      PMA_ARBITRARY: 1
-    # Własny motyw phpMyAdmin.
-    volumes:
-      - ./themes/darkwolf:/var/www/html/themes/darkwolf
     networks:
       - web-network
-
-volumes:
-  mysql_data:
 
 networks:
   web-network:

@@ -20,7 +20,8 @@ docker-compose.*.override.yml
 *~
 vendor/
 
-# Duże/zbędne w obrazie: zrzuty bazy, docs, motyw PMA, uploady, grafiki
+# Duże/zbędne w obrazie: dane bazy, zrzuty SQL, docs, motyw PMA, uploady, grafiki
+data/
 database/
 docs/
 themes/

@@ -1,0 +1,73 @@
+# OstatniWorekCementu — środowisko lokalne (PHP + Apache + MySQL + phpMyAdmin).
+# Start: docker compose up -d --build
+# Aplikacja:    http://localhost:8082/  (przekierowuje na /?page=home)
+# phpMyAdmin:   http://localhost:8084/  (root / hasło z MYSQL_ROOT_PASSWORD)
+#
+# Cała konfiguracja i sekrety są w .env (pliku .env nie commitujemy).
+# Najpierw skopiuj wzór:   cp .env.example .env
+# Porty publikowane są domyślnie tylko na interfejsie lokalnym (BIND_ADDR).
+#
+# Nazwy kontenerów mają prefiks owc-, bo container_name jest globalny —
+# chroni to przed kolizją z innymi stosami (np. db/phpmyadmin/apache na Azure).
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: owc-app
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:8082:80"
+    env_file:
+      - .env
+    environment:
+      # Strefa czasowa (wartość ze .env, stała i niewrażliwa).
+      TZ: ${TZ:-Europe/Warsaw}
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - web-network
+
+  db:
+    image: mysql:8.0
+    container_name: owc-db
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-Europe/Warsaw}
+    volumes:
+      # Bind mount zamiast named volume — dane leżą w repo/data/mysql (w .gitignore).
+      - ./data/mysql:/var/lib/mysql
+      - ./config/mysql:/etc/mysql/conf.d:ro
+      # Pełny zrzut (struktura + dane testowe, hasło: Haslo123!) ładowany przy pierwszym starcie.
+      - ./database/database.sql:/docker-entrypoint-initdb.d/01-database.sql:ro
+    healthcheck:
+      # Hasło czytane ze zmiennej kontenera (brak sekretu inline).
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - web-network
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: owc-phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:8084:80"
+    env_file:
+      - .env
+    depends_on:
+      - db
+    networks:
+      - web-network
+
+networks:
+  web-network:
+    driver: bridge

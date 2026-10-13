@@ -3,16 +3,35 @@
 
 define('BASE_PATH', dirname(__DIR__));
 
+$config = require BASE_PATH . '/config/config.php';
+
+// Spójna strefa czasowa całej aplikacji (zgodna z TZ kontenerów: Europe/Warsaw).
+date_default_timezone_set('Europe/Warsaw');
+
+// Hartowanie sesji — musi trafić przed pierwszym session_start().
+// use_strict_mode blokuje przyjmowanie nieznanych identyfikatorów sesji,
+// httponly ukrywa ciasteczko przed JS, samesite ogranicza wysyłanie w CSRF.
+ini_set('session.use_strict_mode', '1');
+ini_set('session.cookie_httponly', '1');
+ini_set('session.cookie_samesite', 'Lax');
+
+// Ciasteczko session tylko po HTTPS i wyłącznie w środowisku produkcyjnym.
+if (($config['app']['env'] ?? 'local') === 'prod') {
+    ini_set('session.cookie_secure', '1');
+}
+
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
-$config = require BASE_PATH . '/config/config.php';
-
+require BASE_PATH . '/app/helpers/csrf.php';
+require BASE_PATH . '/app/helpers/auth.php';
 require BASE_PATH . '/app/controllers/HomeController.php';
 require BASE_PATH . '/app/models/Database.php';
 require BASE_PATH . '/app/models/User.php';
 require BASE_PATH . '/app/controllers/AuthController.php';
+require BASE_PATH . '/app/controllers/ProfileController.php';
+require BASE_PATH . '/app/controllers/DashboardController.php';
 
 $page = $_GET['page'] ?? 'home';
 if (!is_string($page)) {
@@ -37,11 +56,19 @@ switch ($page) {
         (new AuthController($config))->logout();
         break;
 
+    case 'profile':
+        (new ProfileController($config))->index();
+        break;
+
+    case 'dashboard':
+        (new DashboardController($config))->index();
+        break;
+
     default:
         http_response_code(404);
         $pageTitle = 'Nie znaleziono strony';
         require BASE_PATH . '/app/views/layout/header.php';
-        echo '<h2>404</h2><p>Nie znaleziono strony.</p>';
+        require BASE_PATH . '/app/views/errors/404.php';
         require BASE_PATH . '/app/views/layout/footer.php';
         break;
 }

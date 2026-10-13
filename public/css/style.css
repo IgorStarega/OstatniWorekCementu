@@ -1,0 +1,189 @@
+/* OstatniWorekCementu — prosty, nowoczesny arkusz stylów. */
+
+:root {
+    --kolor-tla: #f4f6f8;
+    --kolor-ramki: #d7dde3;
+    --kolor-tekstu: #1f2933;
+    --kolor-akcentu: #b45309;
+    --kolor-akcentu-ciemny: #92400e;
+    --kolor-bledu: #b91c1c;
+    --kolor-bledu-tla: #fee2e2;
+    --kolor-sukcesu-tla: #dcfce7;
+    --kolor-sukcesu: #166534;
+    --promien: 8px;
+    --cien: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--kolor-tla);
+    color: var(--kolor-tekstu);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    line-height: 1.5;
+}
+
+header {
+    background: #1f2933;
+    color: #f4f6f8;
+    padding: 1rem 1.5rem;
+    box-shadow: var(--cien);
+}
+
+header h1 {
+    margin: 0 0 0.5rem;
+    font-size: 1.25rem;
+}
+
+nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+nav a {
+    color: #f4f6f8;
+    text-decoration: none;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--promien);
+}
+
+nav a:hover,
+nav a:focus {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+nav span {
+    font-size: 0.9rem;
+}
+
+main {
+    flex: 1;
+    width: 100%;
+    max-width: 780px;
+    margin: 1.5rem auto;
+    padding: 1.5rem;
+    background: #ffffff;
+    border: 1px solid var(--kolor-ramki);
+    border-radius: var(--promien);
+    box-shadow: var(--cien);
+}
+
+h2 {
+    margin-top: 0;
+    color: var(--kolor-akcentu-ciemny);
+}
+
+a {
+    color: var(--kolor-akcentu);
+}
+
+footer {
+    padding: 1rem 1.5rem;
+    text-align: center;
+    font-size: 0.85rem;
+    color: #616e7c;
+}
+
+/* Formularze */
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    max-width: 420px;
+}
+
+label {
+    margin-top: 0.5rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+input {
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--kolor-ramki);
+    border-radius: var(--promien);
+    font-size: 1rem;
+}
+
+input:focus {
+    outline: 2px solid var(--kolor-akcentu);
+    outline-offset: 1px;
+    border-color: var(--kolor-akcentu);
+}
+
+button {
+    margin-top: 1rem;
+    padding: 0.55rem 1rem;
+    background: var(--kolor-akcentu);
+    color: #ffffff;
+    border: none;
+    border-radius: var(--promien);
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+button:hover,
+button:focus {
+    background: var(--kolor-akcentu-ciemny);
+}
+
+.logout-form {
+    display: inline;
+    margin: 0;
+}
+
+.logout-form button {
+    margin: 0;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.85rem;
+}
+
+/* Komunikaty */
+[role="alert"],
+[role="status"] {
+    padding: 0.6rem 0.85rem;
+    border-radius: var(--promien);
+    margin: 0.35rem 0;
+}
+
+[role="alert"] {
+    background: var(--kolor-bledu-tla);
+    color: var(--kolor-bledu);
+    border: 1px solid #fecaca;
+}
+
+[role="status"] {
+    background: var(--kolor-sukcesu-tla);
+    color: var(--kolor-sukcesu);
+    border: 1px solid #bbf7d0;
+}
+
+/* Responsywność */
+@media (max-width: 640px) {
+    main {
+        margin: 0.75rem;
+        padding: 1rem;
+    }
+
+    header,
+    footer {
+        padding: 0.85rem 1rem;
+    }
+
+    form {
+        max-width: 100%;
+    }
+}

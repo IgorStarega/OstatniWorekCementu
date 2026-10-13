@@ -189,28 +189,45 @@ Projekt obejmuje stworzenie kompletnego systemu wspierającego obsługę firmy b
 Główna struktura repozytorium:
 
 > OstatniWorekCementu/
-> ├── app/
-> ├── config/
-> ├── database/
-> ├── docs/
-> ├── public/
-> ├── .gitignore
+> ├── app/                # logika aplikacji (MVC)
+> │   ├── controllers/    # kontrolery (Home, Auth, Profile, Dashboard)
+> │   ├── models/         # modele (Database, User)
+> │   ├── helpers/        # pomocniki (CSRF, autoryzacja)
+> │   └── views/          # widoki (layout, strony, błędy)
+> ├── config/             # konfiguracja aplikacji i serwera MySQL
+> │   └── mysql/
+> ├── database/           # schemat, dane testowe i scalony zrzut
+> ├── docker/             # obraz PHP + konfiguracja Apache
+> │   └── php/
+> ├── docs/               # dokumentacja (diagram ERD)
+> ├── public/             # publiczny katalog serwera (front controller)
+> │   ├── css/
+> │   └── js/
+> ├── .env.example        # wzór konfiguracji lokalnej
+> ├── docker-compose.yml  # stos lokalny (app + db + phpMyAdmin)
+> ├── LICENSE
 > └── README.md
 
 ### `app/`
-Główna część aplikacji zawierająca logikę systemu.
+Główna część aplikacji zawierająca logikę systemu (kontrolery, modele, widoki i pomocniki).
 
 ### `config/`
-Pliki konfiguracyjne aplikacji.
+Pliki konfiguracyjne aplikacji oraz dodatkowa konfiguracja serwera MySQL.
 
 ### `database/`
-Pliki związane ze strukturą oraz inicjalizacją bazy danych.
+Pliki związane ze strukturą oraz inicjalizacją bazy danych
+(`database-bez-rekordow.sql` — DDL, `database-tylko-rekordy.sql` — dane,
+`database.sql` — scalony komplet; DDL zawsze przed danymi).
+
+### `docker/`
+Pliki potrzebne do zbudowania obrazu aplikacji (Dockerfile oraz VirtualHost Apache).
 
 ### `docs/`
-Dokumentacja techniczna oraz materiały związane z projektem.
+Dokumentacja techniczna oraz materiały związane z projektem, m.in. diagram ERD.
 
 ### `public/`
-Publicznie dostępna część aplikacji, z której korzysta użytkownik.
+Publicznie dostępna część aplikacji, z której korzysta użytkownik. `public/index.php`
+to jedyny punkt wejścia (front controller); tutaj trafiają też pliki CSS i JS.
 
 ---
 
@@ -229,35 +246,50 @@ Przed rozpoczęciem pracy należy upewnić się, że środowisko posiada:
 
 ## Uruchomienie
 
+Projekt uruchamiamy lokalnie przez Docker Compose (PHP 8.2 + Apache, MySQL 8.0, phpMyAdmin).
+
 ### 1. Klonowanie repozytorium
 
 Polecenie w terminalu:
 `git clone [https://github.com/IgorStarega/OstatniWorekCementu.git](https://github.com/IgorStarega/OstatniWorekCementu.git)`
 `cd OstatniWorekCementu`
 
-### 2. Konfiguracja bazy danych
+### 2. Przygotowanie konfiguracji
 
-Utwórz bazę danych zgodnie z plikami znajdującymi się w katalogu: `database/`
-Następnie skonfiguruj połączenie aplikacji z bazą danych w plikach znajdujących się w: `config/`
+Skopiuj wzór konfiguracji i w razie potrzeby dostosuj wartości:
 
-### 3. Uruchomienie serwera
+`cp .env.example .env`
 
-Uruchom serwer WWW oraz bazę danych. Następnie skieruj katalog główny serwera na katalog: `public/`
-Po uruchomieniu aplikacja powinna być dostępna pod lokalnym adresem skonfigurowanym dla środowiska.
+Plik `.env` jest w `.gitignore` — nie commitujemy go. Zawiera dane dostępowe MySQL,
+phpMyAdmin oraz ustawienia portów (`BIND_ADDR`) i strefy czasowej (`TZ`).
+
+### 3. Uruchomienie stosu
+
+`docker compose up -d --build`
+
+### 4. Adresy
+
+* Aplikacja: `http://localhost:8082/` (przekierowuje na `/?page=home`)
+* phpMyAdmin: `http://localhost:8084/` (logowanie jako `root`, hasło z `MYSQL_ROOT_PASSWORD`)
+
+### 5. Dane testowe
+
+Przy pierwszym starcie kontener `owc-db` importuje `database/database.sql`
+(struktura + dane testowe). Hasło wszystkich kont testowych to `Haslo123!`.
 
 ---
 
 ## Konfiguracja
 
-Konfiguracja aplikacji znajduje się w katalogu: `config/`
+Konfiguracja lokalna jest w pliku `.env` (wzorem jest `.env.example`). Ustawiamy tam m.in.:
 
-Przed uruchomieniem systemu należy skonfigurować między innymi:
+* `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS` — połączenie aplikacji z bazą,
+* `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` — inicjalizacja MySQL,
+* `PMA_HOST`, `PMA_PORT`, `PMA_USER`, `PMA_PASSWORD`, `PMA_ARBITRARY` — phpMyAdmin,
+* `BIND_ADDR` — interfejs publikowanych portów, `TZ` — strefa czasowa,
+* `APP_ENV` — `local` albo `prod` (w `prod` włączane jest `session.cookie_secure`).
 
-* adres serwera bazy danych,
-* nazwę bazy danych,
-* użytkownika bazy danych,
-* hasło użytkownika,
-* pozostałe ustawienia wymagane przez aplikację.
+Plik `config/config.php` czyta te zmienne i przy ich braku zgłasza jasny błąd.
 
 **Nie należy umieszczać prawdziwych haseł oraz danych dostępowych do produkcyjnej bazy danych w repozytorium Git.**
 
@@ -303,4 +335,19 @@ System rezerwacji usług budowlanych – projekt semestralny 5IT.
 
 Projekt jest rozwijany w ramach prac nad systemem rezerwacji usług budowlanych.
 
-Kolejne elementy systemu mogą obejmować rozwój panelu klienta, pracownika i administratora oraz dalsze usprawnienia procesu obsługi rezerwacji.
+### Etap 2 — zadania
+
+| # | Zadanie | Status |
+|---|---------|--------|
+| 1 | Hartowanie sesji (strict mode, httponly, samesite, timezone) | ukończone |
+| 2 | Kontenery: porty, sekrety, nazwy, strefa czasowa, bind mount | ukończone |
+| 3 | Konfiguracja bazy spójna z `.env` | ukończone |
+| 4 | Ochrona CSRF formularzy logowania i rejestracji | ukończone |
+| 5 | Logout wyłącznie w kontrolerze (POST + CSRF) | ukończone |
+| 6 | Ochrona stron i mechanizm ról (#33) | ukończone |
+| 7 | Panel klienta i edycja profilu (#34) | ukończone |
+| 8 | Integralność rezerwacji w schemacie bazy | ukończone |
+| 9 | Warstwa wizualna (CSS) i dokumentacja | ukończone |
+
+Kolejne elementy systemu mogą obejmować rozwój panelu pracownika i administratora
+(usługi, harmonogramy, rezerwacje) oraz dalsze usprawnienia procesu obsługi rezerwacji.

@@ -16,7 +16,7 @@ class AuthController
         }
 
         if (!empty($_SESSION['user_id'])) {
-            header('Location: /?page=home');
+            header('Location: ' . $this->homeForRole((string) ($_SESSION['role'] ?? 'klient')));
             exit;
         }
 
@@ -26,6 +26,8 @@ class AuthController
         $message = '';
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            csrf_verify($this->postString('csrf_token'));
+
             $email = mb_strtolower(trim($this->postString('email')));
             $password = $this->postString('password');
 
@@ -45,18 +47,11 @@ class AuthController
                     }
                     session_regenerate_id(true);
 
-                    // Zapisanie w tablicy $_SESSION kluczowych danych: user_id oraz role (bez hasła!)
+                    // W sesji trzymamy wyłącznie user_id i role (bez hasła i danych osobowych).
                     $_SESSION['user_id'] = (int) $user['id'];
                     $_SESSION['role'] = $user['role'];
-                    $_SESSION['user'] = [
-                        'id'         => (int) $user['id'],
-                        'first_name' => $user['first_name'],
-                        'last_name'  => $user['last_name'],
-                        'email'      => $user['email'],
-                        'role'       => $user['role'],
-                    ];
 
-                    header('Location: /?page=home');
+                    header('Location: ' . $this->homeForRole((string) $user['role']));
                     exit;
                 } else {
                     $errors[] = 'Nieprawidłowy e-mail lub hasło.';
@@ -71,7 +66,38 @@ class AuthController
 
     public function logout(): void
     {
-        require BASE_PATH . '/public/logout.php';
+        // Wylogowanie wyłącznie metodą POST i z poprawnym tokenem CSRF.
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            header('Allow: POST');
+            exit;
+        }
+
+        csrf_verify($this->postString('csrf_token'));
+
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+
+        $_SESSION = [];
+
+        if (ini_get('session.use_cookies')) {
+            $params = session_get_cookie_params();
+            setcookie(
+                session_name(),
+                '',
+                time() - 42000,
+                $params['path'],
+                $params['domain'],
+                $params['secure'],
+                $params['httponly']
+            );
+        }
+
+        session_destroy();
+
+        header('Location: /?page=home');
+        exit;
     }
 
     public function register(): void
@@ -80,8 +106,8 @@ class AuthController
             session_start();
         }
 
-        if (!empty($_SESSION['user_id']) || !empty($_SESSION['user'])) {
-            header('Location: /?page=home');
+        if (!empty($_SESSION['user_id'])) {
+            header('Location: ' . $this->homeForRole((string) ($_SESSION['role'] ?? 'klient')));
             exit;
         }
 
@@ -94,6 +120,8 @@ class AuthController
         $message = '';
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            csrf_verify($this->postString('csrf_token'));
+
             $firstName = trim($this->postString('first_name'));
             $lastName = trim($this->postString('last_name'));
             $email = mb_strtolower(trim($this->postString('email')));
@@ -167,6 +195,12 @@ class AuthController
     {
         $pdo = Database::connect($this->config['db']);
         return new User($pdo);
+    }
+
+    // Adres startowy po zalogowaniu, zależny od roli użytkownika.
+    private function homeForRole(string $role): string
+    {
+        return $role === 'klient' ? '/?page=profile' : '/?page=dashboard';
     }
 
     private function postString(string $key): string
