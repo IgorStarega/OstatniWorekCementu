@@ -21,6 +21,9 @@ public/uploads/
 docker-compose.override.yml
 docker-compose.*.override.yml
 
+# Dane lokalnej bazy MySQL (bind mount ./data/mysql) — nie do repo
+data/
+
 # Systemowe i IDE
 .DS_Store
 Thumbs.db
