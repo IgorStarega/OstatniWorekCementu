@@ -148,7 +148,8 @@ ALTER TABLE `employees`
 --
 ALTER TABLE `employee_availability`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `employee_id` (`employee_id`);
+  ADD KEY `employee_id` (`employee_id`),
+  ADD UNIQUE KEY `uq_employee_day` (`employee_id`,`day_of_week`);
 
 --
 -- Indeksy dla tabeli `employee_services`
@@ -166,7 +167,8 @@ ALTER TABLE `reservations`
   ADD KEY `employee_id` (`employee_id`),
   ADD KEY `service_id` (`service_id`),
   ADD KEY `reservation_date` (`reservation_date`),
-  ADD KEY `status` (`status`);
+  ADD KEY `status` (`status`),
+  ADD UNIQUE KEY `uq_employee_slot` (`employee_id`,`reservation_date`,`start_time`);
 
 --
 -- Indeksy dla tabeli `services`
