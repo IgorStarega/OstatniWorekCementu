@@ -25,10 +25,13 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 }
 
 require BASE_PATH . '/app/helpers/csrf.php';
+require BASE_PATH . '/app/helpers/auth.php';
 require BASE_PATH . '/app/controllers/HomeController.php';
 require BASE_PATH . '/app/models/Database.php';
 require BASE_PATH . '/app/models/User.php';
 require BASE_PATH . '/app/controllers/AuthController.php';
+require BASE_PATH . '/app/controllers/ProfileController.php';
+require BASE_PATH . '/app/controllers/DashboardController.php';
 
 $page = $_GET['page'] ?? 'home';
 if (!is_string($page)) {
@@ -51,6 +54,14 @@ switch ($page) {
 
     case 'logout':
         (new AuthController($config))->logout();
+        break;
+
+    case 'profile':
+        (new ProfileController($config))->index();
+        break;
+
+    case 'dashboard':
+        (new DashboardController($config))->index();
         break;
 
     default:

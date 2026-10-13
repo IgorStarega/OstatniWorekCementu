@@ -16,7 +16,7 @@ class AuthController
         }
 
         if (!empty($_SESSION['user_id'])) {
-            header('Location: /?page=home');
+            header('Location: ' . $this->homeForRole((string) ($_SESSION['role'] ?? 'klient')));
             exit;
         }
 
@@ -58,7 +58,7 @@ class AuthController
                         'role'       => $user['role'],
                     ];
 
-                    header('Location: /?page=home');
+                    header('Location: ' . $this->homeForRole((string) $user['role']));
                     exit;
                 } else {
                     $errors[] = 'Nieprawidłowy e-mail lub hasło.';
@@ -114,7 +114,7 @@ class AuthController
         }
 
         if (!empty($_SESSION['user_id']) || !empty($_SESSION['user'])) {
-            header('Location: /?page=home');
+            header('Location: ' . $this->homeForRole((string) ($_SESSION['role'] ?? 'klient')));
             exit;
         }
 
@@ -202,6 +202,12 @@ class AuthController
     {
         $pdo = Database::connect($this->config['db']);
         return new User($pdo);
+    }
+
+    // Adres startowy po zalogowaniu, zależny od roli użytkownika.
+    private function homeForRole(string $role): string
+    {
+        return $role === 'klient' ? '/?page=profile' : '/?page=dashboard';
     }
 
     private function postString(string $key): string
