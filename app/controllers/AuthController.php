@@ -47,16 +47,9 @@ class AuthController
                     }
                     session_regenerate_id(true);
 
-                    // Zapisanie w tablicy $_SESSION kluczowych danych: user_id oraz role (bez hasła!)
+                    // W sesji trzymamy wyłącznie user_id i role (bez hasła i danych osobowych).
                     $_SESSION['user_id'] = (int) $user['id'];
                     $_SESSION['role'] = $user['role'];
-                    $_SESSION['user'] = [
-                        'id'         => (int) $user['id'],
-                        'first_name' => $user['first_name'],
-                        'last_name'  => $user['last_name'],
-                        'email'      => $user['email'],
-                        'role'       => $user['role'],
-                    ];
 
                     header('Location: ' . $this->homeForRole((string) $user['role']));
                     exit;
@@ -113,7 +106,7 @@ class AuthController
             session_start();
         }
 
-        if (!empty($_SESSION['user_id']) || !empty($_SESSION['user'])) {
+        if (!empty($_SESSION['user_id'])) {
             header('Location: ' . $this->homeForRole((string) ($_SESSION['role'] ?? 'klient')));
             exit;
         }

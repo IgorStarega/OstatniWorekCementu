@@ -44,3 +44,26 @@ function requireRole(string ...$roles): void
         exit;
     }
 }
+
+// Imię zalogowanego użytkownika pobierane z bazy (sesja trzyma tylko user_id i role).
+function currentUserFirstName(): string
+{
+    $userId = currentUserId();
+    if ($userId === null) {
+        return 'Użytkownik';
+    }
+
+    $config = $GLOBALS['config'] ?? [];
+    if (empty($config['db'])) {
+        return 'Użytkownik';
+    }
+
+    try {
+        $pdo = Database::connect($config['db']);
+        $user = (new User($pdo))->findById($userId);
+    } catch (Throwable $exception) {
+        return 'Użytkownik';
+    }
+
+    return (string) ($user['first_name'] ?? 'Użytkownik');
+}

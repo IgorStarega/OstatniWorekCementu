@@ -11,7 +11,7 @@
         <nav>
             <a href="/?page=home">Strona główna</a>
             <?php if (!empty($_SESSION['user_id'])): ?>
-                <span>Zalogowano jako: <strong><?= htmlspecialchars($_SESSION['user']['first_name'] ?? 'Użytkownik', ENT_QUOTES, 'UTF-8') ?></strong> (<?= htmlspecialchars($_SESSION['role'] ?? 'klient', ENT_QUOTES, 'UTF-8') ?>)</span>
+                <span>Zalogowano jako: <strong><?= htmlspecialchars(currentUserFirstName(), ENT_QUOTES, 'UTF-8') ?></strong> (<?= htmlspecialchars($_SESSION['role'] ?? 'klient', ENT_QUOTES, 'UTF-8') ?>)</span>
                 <form method="post" action="/?page=logout" class="logout-form">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
                     <button type="submit">Wyloguj się</button>

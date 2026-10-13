@@ -23,6 +23,20 @@ class User
         return $user ?: null;
     }
 
+    public function findById(int $id): ?array
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT id, first_name, last_name, email, phone, role, is_active
+             FROM users
+             WHERE id = :id
+             LIMIT 1'
+        );
+        $statement->execute(['id' => $id]);
+        $user = $statement->fetch();
+
+        return $user ?: null;
+    }
+
     public function create(
         string $firstName,
         string $lastName,
@@ -45,5 +59,23 @@ class User
         ]);
 
         return (int) $this->pdo->lastInsertId();
+    }
+
+    // Aktualizuje dane profilu. ID pochodzi wyłącznie z sesji — nigdy z formularza.
+    public function updateProfile(int $id, string $firstName, string $lastName, string $phone): bool
+    {
+        $statement = $this->pdo->prepare(
+            'UPDATE users
+             SET first_name = :first_name, last_name = :last_name, phone = :phone
+             WHERE id = :id'
+        );
+        $statement->execute([
+            'first_name' => $firstName,
+            'last_name'  => $lastName,
+            'phone'      => $phone,
+            'id'         => $id,
+        ]);
+
+        return true;
     }
 }
