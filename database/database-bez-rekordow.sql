@@ -8,7 +8,7 @@
 -- Wersja PHP: 8.3.26
 
 -- Plik odtwarza bazę od zera: tworzy bazę `budowlanka_rezerwacje`
--- i całą strukturę (7 tabel, klucze, indeksy). Bez danych testowych.
+-- i całą strukturę (8 tabel, klucze, indeksy). Bez danych testowych.
 CREATE DATABASE IF NOT EXISTS `budowlanka_rezerwacje`
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `budowlanka_rezerwacje`;
@@ -129,6 +129,24 @@ CREATE TABLE `users` (
   `phone` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `role` enum('klient','pracownik','admin') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'klient',
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `failed_attempts` int NOT NULL DEFAULT '0',
+  `locked_until` datetime DEFAULT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Struktura tabeli dla tabeli `password_resets`
+--
+-- Jednorazowe tokeny resetu hasła; w bazie trzymamy tylko ich hash SHA-256.
+--
+
+CREATE TABLE `password_resets` (
+  `id` int NOT NULL,
+  `email` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `token_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expires_at` datetime NOT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -191,6 +209,14 @@ ALTER TABLE `users`
   ADD UNIQUE KEY `email` (`email`);
 
 --
+-- Indeksy dla tabeli `password_resets`
+--
+ALTER TABLE `password_resets`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `token_hash` (`token_hash`),
+  ADD KEY `email` (`email`);
+
+--
 -- AUTO_INCREMENT dla zrzuconych tabel
 --
 
@@ -228,6 +254,12 @@ ALTER TABLE `service_categories`
 -- AUTO_INCREMENT dla tabeli `users`
 --
 ALTER TABLE `users`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT dla tabeli `password_resets`
+--
+ALTER TABLE `password_resets`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --

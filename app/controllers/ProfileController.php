@@ -1,5 +1,5 @@
 <?php
-// Panel klienta: podgląd i edycja danych profilu.
+// Panel klienta: podgląd i edycja danych profilu oraz zmiana hasła.
 class ProfileController
 {
     private $config;
@@ -14,7 +14,7 @@ class ProfileController
         requireLogin();
 
         $userId = currentUserId();
-        $user = $this->getUsers()->findById($userId);
+        $user = userRepository($this->config)->findById($userId);
 
         // Konto mogło zostać usunięte w międzyczasie — czyścimy sesję.
         if ($user === null) {
@@ -32,27 +32,31 @@ class ProfileController
         $phone = (string) ($user['phone'] ?? '');
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            csrf_verify($this->postString('csrf_token'));
+            csrf_verify(postString('csrf_token'));
 
-            $firstName = trim($this->postString('first_name'));
-            $lastName = trim($this->postString('last_name'));
-            $phone = trim($this->postString('phone'));
+            if (postString('form') === 'password') {
+                $this->changePassword($userId, $errors, $message);
+            } else {
+                $firstName = trim(postString('first_name'));
+                $lastName = trim(postString('last_name'));
+                $phone = trim(postString('phone'));
 
-            // Walidacja serwerowa identyczna jak przy rejestracji.
-            if ($firstName === '' || mb_strlen($firstName) < 2 || mb_strlen($firstName) > 50) {
-                $errors[] = 'Imię jest wymagane (od 2 do 50 znaków).';
-            }
-            if ($lastName === '' || mb_strlen($lastName) < 2 || mb_strlen($lastName) > 50) {
-                $errors[] = 'Nazwisko jest wymagane (od 2 do 50 znaków).';
-            }
-            if ($phone === '' || !preg_match('/^\+?[0-9\s\-]{7,20}$/', $phone)) {
-                $errors[] = 'Podaj poprawny numer telefonu (od 7 do 20 znaków, dopuszczalne cyfry, spacje, myślniki i znak +).';
-            }
+                // Walidacja serwerowa identyczna jak przy rejestracji (wspólny helper).
+                foreach ([
+                    validationFirstName($firstName),
+                    validationLastName($lastName),
+                    validationPhone($phone),
+                ] as $error) {
+                    if ($error !== null) {
+                        $errors[] = $error;
+                    }
+                }
 
-            if ($errors === []) {
-                // ID wyłącznie z sesji (currentUserId) — żadnego ID z POST/GET (ochrona przed IDOR).
-                $this->getUsers()->updateProfile($userId, $firstName, $lastName, $phone);
-                $message = 'Dane profilu zostały zapisane.';
+                if ($errors === []) {
+                    // ID wyłącznie z sesji (currentUserId) — żadnego ID z POST/GET (ochrona przed IDOR).
+                    userRepository($this->config)->updateProfile($userId, $firstName, $lastName, $phone);
+                    $message = 'Dane profilu zostały zapisane.';
+                }
             }
         }
 
@@ -61,14 +65,46 @@ class ProfileController
         require BASE_PATH . '/app/views/layout/footer.php';
     }
 
-    private function getUsers(): User
+    // Zmiana hasła po podaniu obecnego. Weryfikacja chroni przed przejęciem cudzej sesji.
+    private function changePassword(int $userId, array &$errors, string &$message): void
     {
-        $pdo = Database::connect($this->config['db']);
-        return new User($pdo);
-    }
+        $currentPassword = postString('current_password');
+        $newPassword = postString('new_password');
+        $newPasswordConfirmation = postString('new_password_confirmation');
 
-    private function postString(string $key): string
-    {
-        return is_string($_POST[$key] ?? null) ? $_POST[$key] : '';
+        $users = userRepository($this->config);
+        $user = $users->findWithPassword($userId);
+
+        if ($user === null) {
+            $errors[] = 'Nie znaleziono konta.';
+
+            return;
+        }
+
+        if (!password_verify($currentPassword, (string) $user['password'])) {
+            $errors[] = 'Obecne hasło jest nieprawidłowe.';
+        }
+
+        $passwordError = validationPassword($newPassword);
+        if ($passwordError !== null) {
+            $errors[] = $passwordError;
+        } elseif ($newPassword === $currentPassword) {
+            $errors[] = 'Nowe hasło musi różnić się od obecnego.';
+        }
+
+        if ($newPassword !== $newPasswordConfirmation) {
+            $errors[] = 'Nowe hasła nie są takie same.';
+        }
+
+        if ($errors !== []) {
+            return;
+        }
+
+        // ID pochodzi wyłącznie z sesji; hasło zapisujemy jako hash.
+        $users->updatePassword($userId, password_hash($newPassword, PASSWORD_DEFAULT));
+
+        // Unieważniamy stary identyfikator sesji po zmianie poświadczeń.
+        session_regenerate_id(true);
+        $message = 'Hasło zostało zmienione.';
     }
 }

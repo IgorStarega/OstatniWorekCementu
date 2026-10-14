@@ -45,6 +45,12 @@ function requireRole(string ...$roles): void
     }
 }
 
+// Jedno miejsce tworzenia repozytorium użytkowników (współdzieli połączenie PDO).
+function userRepository(array $config): User
+{
+    return new User(Database::connect($config['db']));
+}
+
 // Imię zalogowanego użytkownika pobierane z bazy (sesja trzyma tylko user_id i role).
 function currentUserFirstName(): string
 {
@@ -59,8 +65,7 @@ function currentUserFirstName(): string
     }
 
     try {
-        $pdo = Database::connect($config['db']);
-        $user = (new User($pdo))->findById($userId);
+        $user = userRepository($config)->findById($userId);
     } catch (Throwable $exception) {
         return 'Użytkownik';
     }
