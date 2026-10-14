@@ -3,10 +3,52 @@
 
 define('BASE_PATH', dirname(__DIR__));
 
-$config = require BASE_PATH . '/config/config.php';
-
 // Spójna strefa czasowa całej aplikacji (zgodna z TZ kontenerów: Europe/Warsaw).
 date_default_timezone_set('Europe/Warsaw');
+
+// Obsługa błędów zależna od środowiska: prod nigdy nie pokazuje szczegółów,
+// local może (ułatwia pracę), ale i tak wyjątki wyświetlamy przez widok 500.
+$appEnv = getenv('APP_ENV') ?: 'local';
+ini_set('display_errors', $appEnv === 'prod' ? '0' : '1');
+ini_set('log_errors', '1');
+error_reporting(E_ALL);
+
+// Definicje funkcji i klas ładujemy przed konfiguracją i handlerem błędów,
+// żeby widok 500 (korzystający z layoutu) działał nawet gdy config.php rzuci wyjątek.
+require BASE_PATH . '/app/helpers/csrf.php';
+require BASE_PATH . '/app/helpers/auth.php';
+require BASE_PATH . '/app/helpers/validation.php';
+require BASE_PATH . '/app/models/Database.php';
+require BASE_PATH . '/app/models/User.php';
+require BASE_PATH . '/app/models/PasswordReset.php';
+require BASE_PATH . '/app/controllers/HomeController.php';
+require BASE_PATH . '/app/controllers/AuthController.php';
+require BASE_PATH . '/app/controllers/PasswordResetController.php';
+require BASE_PATH . '/app/controllers/ProfileController.php';
+require BASE_PATH . '/app/controllers/DashboardController.php';
+
+// Nieobsłużony wyjątek: zapisujemy szczegóły do logu, a użytkownik widzi
+// neutralny widok 500 (bez ścieżek, numerów linii i stack trace).
+set_exception_handler(function (Throwable $exception): void {
+    error_log(sprintf(
+        'Nieobsłużony wyjątek %s: %s w %s:%d',
+        get_class($exception),
+        $exception->getMessage(),
+        $exception->getFile(),
+        $exception->getLine()
+    ));
+
+    if (!headers_sent()) {
+        http_response_code(500);
+    }
+
+    $pageTitle = 'Błąd serwera';
+    require BASE_PATH . '/app/views/layout/header.php';
+    require BASE_PATH . '/app/views/errors/500.php';
+    require BASE_PATH . '/app/views/layout/footer.php';
+});
+
+$config = require BASE_PATH . '/config/config.php';
 
 // Hartowanie sesji — musi trafić przed pierwszym session_start().
 // use_strict_mode blokuje przyjmowanie nieznanych identyfikatorów sesji,
@@ -23,15 +65,6 @@ if (($config['app']['env'] ?? 'local') === 'prod') {
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
-
-require BASE_PATH . '/app/helpers/csrf.php';
-require BASE_PATH . '/app/helpers/auth.php';
-require BASE_PATH . '/app/controllers/HomeController.php';
-require BASE_PATH . '/app/models/Database.php';
-require BASE_PATH . '/app/models/User.php';
-require BASE_PATH . '/app/controllers/AuthController.php';
-require BASE_PATH . '/app/controllers/ProfileController.php';
-require BASE_PATH . '/app/controllers/DashboardController.php';
 
 $page = $_GET['page'] ?? 'home';
 if (!is_string($page)) {
@@ -62,6 +95,14 @@ switch ($page) {
 
     case 'dashboard':
         (new DashboardController($config))->index();
+        break;
+
+    case 'forgot-password':
+        (new PasswordResetController($config))->forgotPassword();
+        break;
+
+    case 'reset-password':
+        (new PasswordResetController($config))->resetPassword();
         break;
 
     default:

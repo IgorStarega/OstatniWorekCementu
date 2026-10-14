@@ -2,6 +2,9 @@
 // Obsługa formularzy logowania i rejestracji.
 class AuthController
 {
+    // Po tylu nieudanych próbach konto jest czasowo blokowane.
+    private const MAX_LOGIN_ATTEMPTS = 5;
+
     private $config;
 
     public function __construct(array $config)
@@ -26,22 +29,30 @@ class AuthController
         $message = '';
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            csrf_verify($this->postString('csrf_token'));
+            csrf_verify(postString('csrf_token'));
 
-            $email = mb_strtolower(trim($this->postString('email')));
-            $password = $this->postString('password');
+            $email = mb_strtolower(trim(postString('email')));
+            $password = postString('password');
 
-            if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 100) {
-                $errors[] = 'Podaj poprawny adres e-mail.';
+            if (($error = validationEmail($email, 'Podaj poprawny adres e-mail.')) !== null) {
+                $errors[] = $error;
             }
             if ($password === '') {
                 $errors[] = 'Podaj hasło.';
             }
 
             if ($errors === []) {
-                $user = $this->getUsers()->findByEmail($email);
-                // Weryfikacja hasła za pomocą password_verify() i sprawdzenie aktywności konta
-                if ($user && (int) $user['is_active'] === 1 && password_verify($password, $user['password'])) {
+                $users = userRepository($this->config);
+                $user = $users->findByEmail($email);
+
+                if ($user && $this->isLocked($user)) {
+                    // Konto z aktywną blokadą — nawet poprawne hasło nie przechodzi.
+                    $errors[] = 'Konto jest tymczasowo zablokowane. Spróbuj ponownie za '
+                        . $this->lockMinutesLeft($user) . ' min.';
+                } elseif ($user && (int) $user['is_active'] === 1
+                    && password_verify($password, $user['password'])) {
+                    $users->clearFailedLogins((int) $user['id']);
+
                     if (session_status() !== PHP_SESSION_ACTIVE) {
                         session_start();
                     }
@@ -54,7 +65,19 @@ class AuthController
                     header('Location: ' . $this->homeForRole((string) $user['role']));
                     exit;
                 } else {
-                    $errors[] = 'Nieprawidłowy e-mail lub hasło.';
+                    // Ten sam komunikat dla złego hasła i nieistniejącego konta (ochrona przed enumeracją).
+                    if ($user) {
+                        $attempts = (int) $user['failed_attempts'] + 1;
+                        if ($attempts >= self::MAX_LOGIN_ATTEMPTS) {
+                            $users->lockAccount((int) $user['id']);
+                            $errors[] = 'Konto zostało tymczasowo zablokowane na 15 minut.';
+                        } else {
+                            $users->incrementFailedAttempts((int) $user['id']);
+                            $errors[] = 'Nieprawidłowy e-mail lub hasło.';
+                        }
+                    } else {
+                        $errors[] = 'Nieprawidłowy e-mail lub hasło.';
+                    }
                 }
             }
         }
@@ -73,7 +96,7 @@ class AuthController
             exit;
         }
 
-        csrf_verify($this->postString('csrf_token'));
+        csrf_verify(postString('csrf_token'));
 
         if (session_status() !== PHP_SESSION_ACTIVE) {
             session_start();
@@ -120,40 +143,33 @@ class AuthController
         $message = '';
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            csrf_verify($this->postString('csrf_token'));
+            csrf_verify(postString('csrf_token'));
 
-            $firstName = trim($this->postString('first_name'));
-            $lastName = trim($this->postString('last_name'));
-            $email = mb_strtolower(trim($this->postString('email')));
-            $phone = trim($this->postString('phone'));
-            $password = $this->postString('password');
-            $passwordConfirmation = $this->postString('password_confirmation');
+            $firstName = trim(postString('first_name'));
+            $lastName = trim(postString('last_name'));
+            $email = mb_strtolower(trim(postString('email')));
+            $phone = trim(postString('phone'));
+            $password = postString('password');
+            $passwordConfirmation = postString('password_confirmation');
 
-            // Backendowa walidacja danych wejściowych — nigdy nie ufamy danym z frontendu
-            if ($firstName === '' || mb_strlen($firstName) < 2 || mb_strlen($firstName) > 50) {
-                $errors[] = 'Imię jest wymagane (od 2 do 50 znaków).';
-            }
-            if ($lastName === '' || mb_strlen($lastName) < 2 || mb_strlen($lastName) > 50) {
-                $errors[] = 'Nazwisko jest wymagane (od 2 do 50 znaków).';
-            }
-            if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 100) {
-                $errors[] = 'Podaj poprawny adres e-mail (maksymalnie 100 znaków).';
-            }
-            if ($phone === '' || !preg_match('/^\+?[0-9\s\-]{7,20}$/', $phone)) {
-                $errors[] = 'Podaj poprawny numer telefonu (od 7 do 20 znaków, dopuszczalne cyfry, spacje, myślniki i znak +).';
-            }
-            if (strlen($password) < 8) {
-                $errors[] = 'Hasło musi mieć co najmniej 8 znaków.';
-            }
-            if (strlen($password) > 72) {
-                $errors[] = 'Hasło może mieć maksymalnie 72 znaki.';
+            // Backendowa walidacja danych wejściowych — reguły we wspólnym helperze.
+            foreach ([
+                validationFirstName($firstName),
+                validationLastName($lastName),
+                validationEmail($email),
+                validationPhone($phone),
+                validationPassword($password),
+            ] as $error) {
+                if ($error !== null) {
+                    $errors[] = $error;
+                }
             }
             if ($password !== $passwordConfirmation) {
                 $errors[] = 'Hasła nie są takie same.';
             }
 
             if ($errors === []) {
-                $users = $this->getUsers();
+                $users = userRepository($this->config);
                 // Sprawdzenie, czy podany adres e-mail już istnieje w bazie (zapobieganie błędom SQL)
                 if ($users->findByEmail($email)) {
                     $errors[] = 'Konto z tym adresem e-mail już istnieje.';
@@ -175,11 +191,13 @@ class AuthController
                         $email = '';
                         $phone = '';
                     } catch (PDOException $exception) {
-                        // Bezpieczna obsługa naruszenia unikalności (np. wyścig zapytań)
+                        // Bezpieczna obsługa naruszenia unikalności (np. wyścig zapytań).
                         if ($exception->getCode() === '23000') {
                             $errors[] = 'Konto z tym adresem e-mail już istnieje.';
                         } else {
-                            throw $exception;
+                            // Szczegóły lądują w logu, użytkownik widzi tylko ogólny komunikat.
+                            error_log('Rejestracja nie powiodła się: ' . $exception->getMessage());
+                            $errors[] = 'Wystąpił błąd serwera. Spróbuj ponownie później.';
                         }
                     }
                 }
@@ -191,20 +209,23 @@ class AuthController
         require BASE_PATH . '/app/views/layout/footer.php';
     }
 
-    private function getUsers(): User
+    // Czy konto ma aktywną blokadę (locked_until w przyszłości)?
+    private function isLocked(array $user): bool
     {
-        $pdo = Database::connect($this->config['db']);
-        return new User($pdo);
+        return !empty($user['locked_until']) && strtotime((string) $user['locked_until']) > time();
+    }
+
+    // Ile pełnych minut zostało do końca blokady (co najmniej 1).
+    private function lockMinutesLeft(array $user): int
+    {
+        $seconds = strtotime((string) $user['locked_until']) - time();
+
+        return max(1, (int) ceil($seconds / 60));
     }
 
     // Adres startowy po zalogowaniu, zależny od roli użytkownika.
     private function homeForRole(string $role): string
     {
         return $role === 'klient' ? '/?page=profile' : '/?page=dashboard';
-    }
-
-    private function postString(string $key): string
-    {
-        return is_string($_POST[$key] ?? null) ? $_POST[$key] : '';
     }
 }
