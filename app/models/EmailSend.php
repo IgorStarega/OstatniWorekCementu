@@ -42,8 +42,17 @@ class EmailSend
     }
 
     // Zapisuje próbę wysyłki, żeby kolejne żądania respektowały limity.
+    // Przy okazji sprząta stare wpisy tego adresu i celu (retencja 24 h) — DELETE
+    // korzysta z indeksu email_purpose_created i nie rusza innych wierszy.
     public function record(string $email, string $purpose): void
     {
+        $delete = $this->pdo->prepare(
+            'DELETE FROM email_sends
+             WHERE email = :email AND purpose = :purpose
+               AND created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)'
+        );
+        $delete->execute(['email' => $email, 'purpose' => $purpose]);
+
         $statement = $this->pdo->prepare(
             'INSERT INTO email_sends (email, purpose) VALUES (:email, :purpose)'
         );
