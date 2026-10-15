@@ -123,7 +123,7 @@ VALUES
 -- =========================================
 
 INSERT INTO users
-(first_name, last_name, email, password, phone, role, is_active)
+(first_name, last_name, email, password, phone, role, is_active, email_verified_at)
 VALUES
 
 ('Jan',
@@ -132,7 +132,8 @@ VALUES
  '$2y$10$heU/HBucatZT8FUGs7ZrJOi7WSTkBwX9hNc/M5Rz5hvx4gECoeiXW',
  '500600700',
  'pracownik',
- 1),
+ 1,
+ NOW()),
 
 ('Piotr',
  'Nowak',
@@ -140,7 +141,8 @@ VALUES
  '$2y$10$heU/HBucatZT8FUGs7ZrJOi7WSTkBwX9hNc/M5Rz5hvx4gECoeiXW',
  '501601701',
  'pracownik',
- 1),
+ 1,
+ NOW()),
 
 ('Adam',
  'Wiśniewski',
@@ -148,7 +150,8 @@ VALUES
  '$2y$10$heU/HBucatZT8FUGs7ZrJOi7WSTkBwX9hNc/M5Rz5hvx4gECoeiXW',
  '502602702',
  'pracownik',
- 1),
+ 1,
+ NOW()),
 
 ('Marek',
  'Wójcik',
@@ -156,7 +159,8 @@ VALUES
  '$2y$10$heU/HBucatZT8FUGs7ZrJOi7WSTkBwX9hNc/M5Rz5hvx4gECoeiXW',
  '503603703',
  'pracownik',
- 1),
+ 1,
+ NOW()),
 
 ('Anna',
  'Kowalska',
@@ -164,7 +168,8 @@ VALUES
  '$2y$10$heU/HBucatZT8FUGs7ZrJOi7WSTkBwX9hNc/M5Rz5hvx4gECoeiXW',
  '504604704',
  'klient',
- 1),
+ 1,
+ NOW()),
 
 ('Tomasz',
  'Zieliński',
@@ -172,7 +177,8 @@ VALUES
  '$2y$10$heU/HBucatZT8FUGs7ZrJOi7WSTkBwX9hNc/M5Rz5hvx4gECoeiXW',
  '505605705',
  'klient',
- 1),
+ 1,
+ NOW()),
 
 ('Administrator',
  'Systemu',
@@ -180,7 +186,8 @@ VALUES
  '$2y$10$heU/HBucatZT8FUGs7ZrJOi7WSTkBwX9hNc/M5Rz5hvx4gECoeiXW',
  '506606706',
  'admin',
- 1);
+ 1,
+ NOW());
 
 
 -- =========================================

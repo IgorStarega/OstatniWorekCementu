@@ -23,3 +23,4 @@
 
 <p>Nie masz konta? <a href="/?page=register">Zarejestruj się</a></p>
 <p><a href="/?page=forgot-password">Nie pamiętam hasła</a></p>
+<p><a href="/?page=verify-email">Nie potwierdziłem e-maila — wyślij link ponownie</a></p>

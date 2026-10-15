@@ -8,7 +8,7 @@
 -- Wersja PHP: 8.3.26
 
 -- Plik odtwarza bazę od zera: tworzy bazę `budowlanka_rezerwacje`
--- i całą strukturę (8 tabel, klucze, indeksy). Bez danych testowych.
+-- i całą strukturę (10 tabel, klucze, indeksy). Bez danych testowych.
 CREATE DATABASE IF NOT EXISTS `budowlanka_rezerwacje`
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `budowlanka_rezerwacje`;
@@ -131,6 +131,7 @@ CREATE TABLE `users` (
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
   `failed_attempts` int NOT NULL DEFAULT '0',
   `locked_until` datetime DEFAULT NULL,
+  `email_verified_at` datetime DEFAULT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -147,6 +148,39 @@ CREATE TABLE `password_resets` (
   `email` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `token_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
   `expires_at` datetime NOT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Struktura tabeli dla tabeli `email_verifications`
+--
+-- Jednorazowe tokeny potwierdzenia adresu e-mail; w bazie trzymamy tylko
+-- ich hash SHA-256 (wzorzec jak w password_resets).
+--
+
+CREATE TABLE `email_verifications` (
+  `id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `token_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expires_at` datetime NOT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Struktura tabeli dla tabeli `email_sends`
+--
+-- Dziennik wysyłek służący do limitów (cooldown 60 s, maks. 3/h) dla
+-- resetu hasła i ponownej weryfikacji e-maila.
+--
+
+CREATE TABLE `email_sends` (
+  `id` int NOT NULL,
+  `email` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `purpose` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -217,6 +251,21 @@ ALTER TABLE `password_resets`
   ADD KEY `email` (`email`);
 
 --
+-- Indeksy dla tabeli `email_verifications`
+--
+ALTER TABLE `email_verifications`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `token_hash` (`token_hash`),
+  ADD KEY `user_id` (`user_id`);
+
+--
+-- Indeksy dla tabeli `email_sends`
+--
+ALTER TABLE `email_sends`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `email_purpose_created` (`email`,`purpose`,`created_at`);
+
+--
 -- AUTO_INCREMENT dla zrzuconych tabel
 --
 
@@ -263,6 +312,18 @@ ALTER TABLE `password_resets`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT dla tabeli `email_verifications`
+--
+ALTER TABLE `email_verifications`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT dla tabeli `email_sends`
+--
+ALTER TABLE `email_sends`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
 -- Ograniczenia dla zrzutów tabel
 --
 
@@ -298,6 +359,12 @@ ALTER TABLE `reservations`
 --
 ALTER TABLE `services`
   ADD CONSTRAINT `services_ibfk_1` FOREIGN KEY (`category_id`) REFERENCES `service_categories` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Ograniczenia dla tabeli `email_verifications`
+--
+ALTER TABLE `email_verifications`
+  ADD CONSTRAINT `email_verifications_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
