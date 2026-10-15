@@ -46,6 +46,17 @@ if ($appEnv === 'prod' && stripos($appUrl, 'https://') !== 0) {
     throw new RuntimeException('W środowisku prod APP_URL musi zaczynać się od https://.');
 }
 
+// Zaufane adresy reverse proxy (np. kontener cloudflared), rozdzielone przecinkami.
+// Dopuszczalne pojedyncze adresy IP oraz CIDR. Domyślnie PUSTE — świadomie nie
+// ufamy całej prywatnej puli Dockera, bo każdy kontener mógłby podrobić nagłówki.
+$trustedProxies = [];
+foreach (explode(',', (string) getenv('TRUSTED_PROXY_IPS')) as $entry) {
+    $entry = trim($entry);
+    if ($entry !== '') {
+        $trustedProxies[] = $entry;
+    }
+}
+
 return [
     'db' => [
         'host'    => $values['DB_HOST'],
@@ -61,6 +72,8 @@ return [
         'env'  => $appEnv,
         // Publiczny adres aplikacji (APP_URL), bez końcowego "/".
         'url'  => $appUrl,
+        // Zaufane reverse proxy (TRUSTED_PROXY_IPS) — patrz requestFromTrustedProxy().
+        'trusted_proxies' => $trustedProxies,
     ],
     // Poczta przez relay SMTP (relay obsługuje msmtp w kontenerze, patrz
     // docker/php/entrypoint.sh). Wszystkie wartości opcjonalne — brak SMTP_HOST
