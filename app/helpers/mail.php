@@ -41,9 +41,10 @@ function sendMail(array $config, string $to, string $subject, string $body): boo
     }
 }
 
-// Tworzy jednorazowy token weryfikacji e-maila (jeden aktywny na konto),
-// zapisuje w bazie tylko jego SHA-256 i wysyła link z APP_URL.
-function sendVerificationEmail(array $config, int $userId, string $email, string $firstName): bool
+// Tworzy nowy token weryfikacji e-maila (jeden aktywny na konto: usuwa poprzednie),
+// zapisuje w bazie TYLKO hash SHA-256 i zwraca surowy token. Surowy token istnieje
+// wyłącznie w pamięci i w linku wysyłanym mailem.
+function issueEmailVerificationToken(array $config, int $userId): string
 {
     $token = bin2hex(random_bytes(32));
     $expiresAt = date('Y-m-d H:i:s', time() + 24 * 3600);
@@ -52,6 +53,13 @@ function sendVerificationEmail(array $config, int $userId, string $email, string
     $verifications->deleteByUserId($userId);
     $verifications->create($userId, hash('sha256', $token), $expiresAt);
 
+    return $token;
+}
+
+// Wysyła mail z linkiem potwierdzającym zbudowanym z APP_URL. Przyjmuje gotowy token
+// (tworzy go issueEmailVerificationToken()). Zwraca true/false i nie rzuca wyjątku.
+function sendVerificationEmail(array $config, string $email, string $firstName, string $token): bool
+{
     $link = absoluteUrl('/?page=verify-email&token=' . $token);
     $body = 'Dzień dobry' . ($firstName !== '' ? ', ' . $firstName : '') . ',' . "\r\n\r\n"
         . 'dziękujemy za rejestrację w Systemie Rezerwacji Usług Budowlanych.' . "\r\n"

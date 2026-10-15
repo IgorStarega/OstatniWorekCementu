@@ -44,12 +44,8 @@ class EmailVerificationController
                     $throttle = new EmailSend(Database::connect($this->config['db']));
                     if ($throttle->isAllowed($email, self::PURPOSE)) {
                         $throttle->record($email, self::PURPOSE);
-                        sendVerificationEmail(
-                            $this->config,
-                            (int) $user['id'],
-                            $email,
-                            (string) $user['first_name']
-                        );
+                        $token = issueEmailVerificationToken($this->config, (int) $user['id']);
+                        sendVerificationEmail($this->config, $email, (string) $user['first_name'], $token);
                     }
                 }
 
