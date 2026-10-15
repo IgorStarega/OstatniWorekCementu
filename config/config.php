@@ -25,6 +25,27 @@ if ($missing !== []) {
     );
 }
 
+// Bazowy adres publiczny aplikacji — źródło hosta/protokołu we wszystkich linkach
+// absolutnych (maile). Lokalnie domyślnie http://localhost:8082, na serwerze
+// (prod) wymagany i musi być https://, np. https://owc.dziadu.dev.
+$appEnv = getenv('APP_ENV') ?: 'local';
+$appUrl = rtrim(trim((string) getenv('APP_URL')), '/');
+
+if ($appUrl === '' && $appEnv !== 'prod') {
+    $appUrl = 'http://localhost:8082';
+}
+
+if ($appUrl === '' || preg_match('#^https?://[^/\s?\#]+$#i', $appUrl) !== 1) {
+    throw new RuntimeException(
+        'Brak lub niepoprawny APP_URL (oczekiwany format: https://domena, bez ścieżki). '
+        . 'Ustaw go w pliku .env (wzór: .env.example).'
+    );
+}
+
+if ($appEnv === 'prod' && stripos($appUrl, 'https://') !== 0) {
+    throw new RuntimeException('W środowisku prod APP_URL musi zaczynać się od https://.');
+}
+
 return [
     'db' => [
         'host'    => $values['DB_HOST'],
@@ -37,6 +58,8 @@ return [
     'app' => [
         'name' => 'System Rezerwacji Usług Budowlanych',
         // 'local' (domyślnie) albo 'prod' — w prod włączane jest cookie_secure.
-        'env'  => getenv('APP_ENV') ?: 'local',
+        'env'  => $appEnv,
+        // Publiczny adres aplikacji (APP_URL), bez końcowego "/".
+        'url'  => $appUrl,
     ],
 ];
