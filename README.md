@@ -14,6 +14,7 @@ System internetowy do obsługi firmy budowlanej oraz rezerwacji usług budowlany
 * [Struktura projektu](#struktura-projektu)
 * [Wymagania](#wymagania)
 * [Uruchomienie](#uruchomienie)
+* [Testy](#testy)
 * [Konfiguracja](#konfiguracja)
 * [Bezpieczeństwo](#bezpieczeństwo)
 * [Funkcje dodatkowe](#funkcje-dodatkowe)
@@ -307,6 +308,22 @@ dostępu po włączeniu weryfikacji e-mail.
 
 ---
 
+## Testy
+
+Automatyczny smoke test (20 punktów: sesja, CSRF, rejestracja z linkiem, weryfikacja, XSS, IDOR,
+role, blokada konta, schemat bazy, migracje, retencja) uruchamiamy przeciw działającemu stosowi:
+
+```bash
+bash tools/qa-smoke.sh
+```
+
+Skrypt wymaga tylko `bash`, `curl`, `docker compose` i `grep`, zakłada `APP_ENV=local` z pustym
+`SMTP_HOST`, jest idempotentny i po sobie sprząta. Wynik to `X/Y PASS`; kod wyjścia `1`, gdy
+cokolwiek padło. Rzeczy wymagające przeglądarki (ocena wizualna, responsywność, czytelność błędów)
+są w checkliście `tools/qa-manual.md`.
+
+---
+
 ## Konfiguracja
 
 Konfiguracja lokalna jest w pliku `.env` (wzorem jest `.env.example`). Ustawiamy tam m.in.:
@@ -322,7 +339,11 @@ Konfiguracja lokalna jest w pliku `.env` (wzorem jest `.env.example`). Ustawiamy
   `https://owc.dziadu.dev`; w `prod` jest wymagany i musi zaczynać się od `https://`,
 * `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `SMTP_FROM_NAME` — relay SMTP
   używany przez wysyłkę maili (potwierdzenie e-mail, reset hasła). Prawdziwe dane dostępowe
-  trzymamy wyłącznie w lokalnym `.env` (wzór w `.env.example`, domyślnie puste = wysyłka wyłączona).
+  trzymamy wyłącznie w lokalnym `.env` (wzór w `.env.example`, domyślnie puste = wysyłka wyłączona),
+* `TRUSTED_PROXY_IPS` — opcjonalna lista zaufanych adresów reverse proxy (pojedyncze IP lub zapisy
+  CIDR, np. `172.18.0.2`, `172.18.0.0/16`), rozdzielona przecinkami. Domyślnie **pusta** — nie
+  ufamy całej prywatnej puli Dockera. Ustawiamy konkretny adres kontenera tunelu (np. `cloudflared`),
+  żeby działała detekcja HTTPS z `X-Forwarded-Proto` (patrz „Reverse proxy").
 
 **Poczta (SMTP relay).** Port 25 wychodzący jest blokowany (Azure, typowy ISP), a Cloudflare Tunnel
 obsługuje tylko ruch przychodzący, więc SMTP przez tunel nie przejdzie. Dlatego wysyłamy przez
@@ -334,14 +355,21 @@ dostarczalności: SPF (`v=spf1 include:... ~all` — istniejący wpis trzeba sca
 DKIM od dostawcy oraz DMARC (na start `p=none`).
 
 **Reverse proxy.** Za tunelem Cloudflare aplikacja widzi zwykłe HTTP, dlatego protokół wykrywa z
-`X-Forwarded-Proto` / `CF-Visitor`. Te nagłówki są wiarygodne tylko dlatego, że origin jest
-osiągalny wyłącznie przez tunel (porty na pętli lokalnej, `BIND_ADDR=127.0.0.1`) — kod dodatkowo
-ignoruje je dla żądań z adresów publicznych.
+`X-Forwarded-Proto` / `CF-Visitor`. Pętla lokalna (`127.*`, `::1`) jest zaufana zawsze; adresy
+tunelu działającego jako kontener (np. `cloudflared` z sieci Dockera) podajemy w `TRUSTED_PROXY_IPS`.
+Te nagłówki są wiarygodne tylko wtedy, gdy origin jest osiągalny wyłącznie przez tunel (porty na
+pętli lokalnej, `BIND_ADDR=127.0.0.1`) — dlatego domyślnie lista jest pusta, a kod ignoruje te
+nagłówki dla żądań z nieznanych adresów.
 
 **Weryfikacja e-mail (polityka B).** Konto musi mieć potwierdzony adres, żeby się zalogować.
 Link z kodem ważny 24 godziny wysyłany jest po rejestracji; ponowną wysyłkę ogranicza cooldown
 60 s i limit 3 na godzinę (liczniki w bazie `email_sends`). Konta testowe i konta istniejące
 przed tą zmianą są oznaczone jako potwierdzone, więc QA i demo działają bez zmian.
+
+> **Uwaga operacyjna (wdrożenie).** Sesje utworzone przed wdrożeniem weryfikacji nie mają klucza
+> `email_verified`. Kod radzi sobie z tym, dociągając stan z bazy (`EmailVerificationController`),
+> ale bezpieczniej po wdrożeniu poprosić użytkowników o ponowne zalogowanie — najprościej
+> wyczyścić sesje serwera.
 
 Plik `config/config.php` czyta te zmienne i przy ich braku zgłasza jasny błąd.
 
