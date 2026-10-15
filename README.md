@@ -200,7 +200,7 @@ Główna struktura repozytorium:
 > │   └── migrations/     # migracje dla istniejących baz (002-etap2.sql, 003-etap2.sql)
 > ├── docker/             # obraz PHP + konfiguracja Apache
 > │   └── php/
-> ├── docs/               # dokumentacja (ERD.md — aktualny diagram)
+> ├── docs/               # dokumentacja (diagram ERD)
 > ├── public/             # publiczny katalog serwera (front controller)
 > │   ├── css/
 > │   └── js/
@@ -225,9 +225,7 @@ zawiera numerowane migracje dla baz, które już istnieją (zob. „Aktualizacja
 Pliki potrzebne do zbudowania obrazu aplikacji (Dockerfile oraz VirtualHost Apache).
 
 ### `docs/`
-Dokumentacja techniczna oraz materiały związane z projektem. Aktualny diagram bazy to
-[`docs/ERD.md`](docs/ERD.md) (Mermaid, 10 tabel); starszy plik `docs/ERD.jpg` zostaje jako archiwalny
-i nie odpowiada już obecnemu schematowi.
+Dokumentacja techniczna oraz materiały związane z projektem, m.in. diagram ERD.
 
 ### `public/`
 Publicznie dostępna część aplikacji, z której korzysta użytkownik. `public/index.php`
