@@ -18,9 +18,15 @@ class EmailVerificationController
             session_start();
         }
 
-        if (!empty($_SESSION['user_id']) && currentUserEmailVerified()) {
-            header('Location: /?page=home');
-            exit;
+        if (!empty($_SESSION['user_id'])) {
+            $current = userRepository($this->config)->findById((int) $_SESSION['user_id']);
+            if ($current !== null && !empty($current['email_verified_at'])) {
+                // Sesje sprzed wdrożenia weryfikacji nie mają klucza email_verified —
+                // stan rozstrzygamy z bazy i uzupełniamy sesję na przyszłość.
+                $_SESSION['email_verified'] = true;
+                header('Location: /?page=home');
+                exit;
+            }
         }
 
         $pageTitle = 'Potwierdzenie e-maila';
