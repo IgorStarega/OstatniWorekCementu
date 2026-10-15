@@ -18,9 +18,12 @@ error_reporting(E_ALL);
 require BASE_PATH . '/app/helpers/csrf.php';
 require BASE_PATH . '/app/helpers/auth.php';
 require BASE_PATH . '/app/helpers/validation.php';
+require BASE_PATH . '/app/helpers/url.php';
+require BASE_PATH . '/app/helpers/mail.php';
 require BASE_PATH . '/app/models/Database.php';
 require BASE_PATH . '/app/models/User.php';
 require BASE_PATH . '/app/models/PasswordReset.php';
+require BASE_PATH . '/app/models/EmailSend.php';
 require BASE_PATH . '/app/controllers/HomeController.php';
 require BASE_PATH . '/app/controllers/AuthController.php';
 require BASE_PATH . '/app/controllers/PasswordResetController.php';
@@ -58,7 +61,8 @@ ini_set('session.cookie_httponly', '1');
 ini_set('session.cookie_samesite', 'Lax');
 
 // Ciasteczko session tylko po HTTPS i wyłącznie w środowisku produkcyjnym.
-if (($config['app']['env'] ?? 'local') === 'prod') {
+// O HTTPS za reverse proxy wnioskujemy z nagłówków proxy (requestIsHttps()).
+if (($config['app']['env'] ?? 'local') === 'prod' && requestIsHttps()) {
     ini_set('session.cookie_secure', '1');
 }
 

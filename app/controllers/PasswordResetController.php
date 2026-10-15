@@ -44,17 +44,27 @@ class PasswordResetController
                 $user = userRepository($this->config)->findByEmail($email);
 
                 if ($user && (int) $user['is_active'] === 1) {
-                    $token = bin2hex(random_bytes(32));
-                    $expiresAt = date('Y-m-d H:i:s', time() + self::TOKEN_TTL);
+                    // Limity w bazie: cooldown 60 s i maks. 3 wysyłki na godzinę.
+                    $throttle = new EmailSend(Database::connect($this->config['db']));
+                    if ($throttle->isAllowed($email, 'password_reset')) {
+                        $throttle->record($email, 'password_reset');
 
-                    $resets = new PasswordReset(Database::connect($this->config['db']));
-                    // Jeden aktywny reset na konto — stare tokeny tracą ważność.
-                    $resets->deleteByEmail($email);
-                    $resets->create($email, hash('sha256', $token), $expiresAt);
+                        $token = bin2hex(random_bytes(32));
+                        $expiresAt = date('Y-m-d H:i:s', time() + self::TOKEN_TTL);
 
-                    // Brak SMTP: w trybie lokalnym pokazujemy link na ekranie, nigdzie go nie logujemy.
-                    if (($this->config['app']['env'] ?? 'local') === 'local') {
-                        $resetLink = '/?page=reset-password&token=' . $token;
+                        $resets = new PasswordReset(Database::connect($this->config['db']));
+                        // Jeden aktywny reset na konto — stare tokeny tracą ważność.
+                        $resets->deleteByEmail($email);
+                        $resets->create($email, hash('sha256', $token), $expiresAt);
+
+                        // Link absolutny z APP_URL — poprawny host w mailu.
+                        $link = absoluteUrl('/?page=reset-password&token=' . $token);
+                        $this->sendResetEmail($email, $user, $link);
+
+                        // Tryb lokalny (zwykle brak SMTP): pokazujemy link także na ekranie.
+                        if (($this->config['app']['env'] ?? 'local') === 'local') {
+                            $resetLink = $link;
+                        }
                     }
                 }
 
@@ -66,6 +76,18 @@ class PasswordResetController
         require BASE_PATH . '/app/views/layout/header.php';
         require BASE_PATH . '/app/views/auth/forgot_password.php';
         require BASE_PATH . '/app/views/layout/footer.php';
+    }
+
+    // Treść maila resetu hasła. Token występuje wyłącznie w linku — nie logujemy go.
+    private function sendResetEmail(string $email, array $user, string $link): void
+    {
+        $body = 'Dzień dobry' . (!empty($user['first_name']) ? ', ' . $user['first_name'] : '') . ',' . "\r\n\r\n"
+            . 'otrzymaliśmy prośbę o reset hasła w Systemie Rezerwacji Usług Budowlanych.' . "\r\n"
+            . 'Aby ustawić nowe hasło, otwórz link (ważny 1 godzinę):' . "\r\n\r\n"
+            . $link . "\r\n\r\n"
+            . 'Jeśli to nie Ty, zignoruj tę wiadomość — hasło pozostanie bez zmian.' . "\r\n";
+
+        sendMail($this->config, $email, 'Reset hasła', $body);
     }
 
     public function resetPassword(): void

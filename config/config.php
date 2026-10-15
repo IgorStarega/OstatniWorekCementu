@@ -62,4 +62,16 @@ return [
         // Publiczny adres aplikacji (APP_URL), bez końcowego "/".
         'url'  => $appUrl,
     ],
+    // Poczta przez relay SMTP (relay obsługuje msmtp w kontenerze, patrz
+    // docker/php/entrypoint.sh). Wszystkie wartości opcjonalne — brak SMTP_HOST
+    // oznacza wysyłkę wyłączoną (np. lokalnie) i helper sendMail() nic nie robi.
+    'mail' => [
+        'host'      => (string) getenv('SMTP_HOST'),
+        'port'      => getenv('SMTP_PORT') ?: '587',
+        'user'      => (string) getenv('SMTP_USER'),
+        'pass'      => (string) getenv('SMTP_PASS'),
+        // Nadawca widoczny w mailach; domena musi być zweryfikowana u dostawcy.
+        'from'      => getenv('SMTP_FROM') ?: 'owc@dziadu.dev',
+        'from_name' => getenv('SMTP_FROM_NAME') ?: 'Ostatni Worek Cementu',
+    ],
 ];
