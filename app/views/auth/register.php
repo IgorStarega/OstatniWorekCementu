@@ -4,6 +4,11 @@
     <p role="status"><?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?></p>
 <?php endif; ?>
 
+<?php if ($verificationLink !== ''): ?>
+    <p role="status">Tryb lokalny (brak wysyłki e-mail):
+        <a href="<?= htmlspecialchars($verificationLink, ENT_QUOTES, 'UTF-8') ?>">link potwierdzający</a></p>
+<?php endif; ?>
+
 <?php foreach ($errors as $error): ?>
     <p role="alert"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></p>
 <?php endforeach; ?>

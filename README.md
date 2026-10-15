@@ -190,14 +190,14 @@ Główna struktura repozytorium:
 
 > OstatniWorekCementu/
 > ├── app/                # logika aplikacji (MVC)
-> │   ├── controllers/    # kontrolery (Home, Auth, PasswordReset, Profile, Dashboard)
-> │   ├── models/         # modele (Database, User, PasswordReset)
-> │   ├── helpers/        # pomocniki (CSRF, autoryzacja, walidacja, adresy URL)
+> │   ├── controllers/    # kontrolery (Home, Auth, PasswordReset, EmailVerification, Profile, Dashboard)
+> │   ├── models/         # modele (Database, User, PasswordReset, EmailVerification, EmailSend)
+> │   ├── helpers/        # pomocniki (CSRF, autoryzacja, walidacja, adresy URL, poczta)
 > │   └── views/          # widoki (layout, strony, errors/ — 403/404/500)
 > ├── config/             # konfiguracja aplikacji i serwera MySQL
 > │   └── mysql/
 > ├── database/           # schemat, dane testowe i scalony zrzut
-> │   └── migrations/     # migracje dla istniejących baz (np. 002-etap2.sql)
+> │   └── migrations/     # migracje dla istniejących baz (002-etap2.sql, 003-etap2.sql)
 > ├── docker/             # obraz PHP + konfiguracja Apache
 > │   └── php/
 > ├── docs/               # dokumentacja (diagram ERD)
@@ -379,6 +379,8 @@ Podczas wdrażania aplikacji w środowisku produkcyjnym należy zadbać między 
 * **Weryfikacja adresu e-mail (polityka B):** po rejestracji wysyłamy link z tokenem (SHA-256 w bazie,
   ważny 24 godziny); logowanie dozwolone dopiero po potwierdzeniu. Ponowna wysyłka ma te same limity,
   a komunikaty nie ujawniają, czy konto istnieje. Konta testowe są oznaczone jako potwierdzone.
+  W trybie `local` bez skonfigurowanego SMTP link potwierdzający pokazujemy na ekranie
+  (analogicznie do resetu hasła), więc konto da się potwierdzić i zalogować bez poczty.
 * **Wysyłka poczty bez Composera:** `msmtp` w kontenerze przekazuje `mail()` PHP do relaya SMTP (587);
   konfiguracja z `.env` powstaje przy starcie i nie trafia do obrazu. Awaria SMTP daje neutralny komunikat.
 * **Bezpieczne zarządzanie sesją:** `use_strict_mode`, `httponly`, `samesite=Lax`, `cookie_secure` w `prod`

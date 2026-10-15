@@ -148,6 +148,7 @@ class AuthController
         $email = '';
         $phone = '';
         $message = '';
+        $verificationLink = '';
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             csrf_verify(postString('csrf_token'));
@@ -191,10 +192,27 @@ class AuthController
                             password_hash($password, PASSWORD_DEFAULT),
                             'klient'
                         );
-                        // Link potwierdzający z APP_URL (nie z nagłówka Host) + jeden token na konto.
-                        sendVerificationEmail($this->config, $userId, $email, $firstName);
-                        $message = 'Konto utworzone. Sprawdź skrzynkę e-mail i potwierdź adres, '
-                            . 'aby się zalogować.';
+                        // Token zapisujemy PRZED próbą wysyłki — dzięki temu fallback
+                        // w trybie lokalnym ma czym potwierdzić konto.
+                        $token = issueEmailVerificationToken($this->config, $userId);
+                        $sent = sendVerificationEmail($this->config, $email, $firstName, $token);
+
+                        if ($sent) {
+                            $message = 'Konto utworzone. Sprawdź skrzynkę e-mail i potwierdź adres, '
+                                . 'aby się zalogować.';
+                        } elseif (($this->config['app']['env'] ?? 'local') === 'local') {
+                            // Brak SMTP w trybie lokalnym: pokazujemy link na ekranie
+                            // (ten sam wzorzec co przy resecie hasła).
+                            $verificationLink = absoluteUrl('/?page=verify-email&token=' . $token);
+                            $message = 'Konto utworzone. Tryb lokalny (brak wysyłki e-mail) — '
+                                . 'potwierdź adres linkiem poniżej.';
+                        } else {
+                            // prod: SMTP ma działać. Szczegóły tylko do logu, bez obietnic wobec użytkownika.
+                            error_log('Weryfikacja e-mail: wysyłka nie powiodła się dla user_id=' . $userId);
+                            $message = 'Konto utworzone. Jeśli nie otrzymasz wiadomości, '
+                                . 'użyj opcji ponownej wysyłki.';
+                        }
+
                         // Wyczyszczenie formularza po pomyślnym utworzeniu konta
                         $firstName = '';
                         $lastName = '';
