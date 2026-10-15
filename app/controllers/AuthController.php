@@ -51,19 +51,26 @@ class AuthController
                         . $this->lockMinutesLeft($user) . ' min.';
                 } elseif ($user && (int) $user['is_active'] === 1
                     && password_verify($password, $user['password'])) {
-                    $users->clearFailedLogins((int) $user['id']);
+                    // Polityka B: konto bez potwierdzonego e-maila nie może się zalogować.
+                    if (empty($user['email_verified_at'])) {
+                        $errors[] = 'Najpierw potwierdź adres e-mail. Sprawdź skrzynkę '
+                            . 'lub wyślij link ponownie na stronie potwierdzenia.';
+                    } else {
+                        $users->clearFailedLogins((int) $user['id']);
 
-                    if (session_status() !== PHP_SESSION_ACTIVE) {
-                        session_start();
+                        if (session_status() !== PHP_SESSION_ACTIVE) {
+                            session_start();
+                        }
+                        session_regenerate_id(true);
+
+                        // W sesji trzymamy wyłącznie user_id i role (bez hasła i danych osobowych).
+                        $_SESSION['user_id'] = (int) $user['id'];
+                        $_SESSION['role'] = $user['role'];
+                        $_SESSION['email_verified'] = true;
+
+                        header('Location: ' . $this->homeForRole((string) $user['role']));
+                        exit;
                     }
-                    session_regenerate_id(true);
-
-                    // W sesji trzymamy wyłącznie user_id i role (bez hasła i danych osobowych).
-                    $_SESSION['user_id'] = (int) $user['id'];
-                    $_SESSION['role'] = $user['role'];
-
-                    header('Location: ' . $this->homeForRole((string) $user['role']));
-                    exit;
                 } else {
                     // Ten sam komunikat dla złego hasła i nieistniejącego konta (ochrona przed enumeracją).
                     if ($user) {
@@ -176,7 +183,7 @@ class AuthController
                 } else {
                     try {
                         // Zapis hasła do bazy wyłącznie przy użyciu password_hash(), z rolą klient
-                        $users->create(
+                        $userId = $users->create(
                             $firstName,
                             $lastName,
                             $email,
@@ -184,7 +191,10 @@ class AuthController
                             password_hash($password, PASSWORD_DEFAULT),
                             'klient'
                         );
-                        $message = 'Konto utworzone. Możesz się teraz zalogować.';
+                        // Link potwierdzający z APP_URL (nie z nagłówka Host) + jeden token na konto.
+                        sendVerificationEmail($this->config, $userId, $email, $firstName);
+                        $message = 'Konto utworzone. Sprawdź skrzynkę e-mail i potwierdź adres, '
+                            . 'aby się zalogować.';
                         // Wyczyszczenie formularza po pomyślnym utworzeniu konta
                         $firstName = '';
                         $lastName = '';

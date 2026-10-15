@@ -284,15 +284,21 @@ Przy pierwszym starcie kontener `owc-db` importuje `database/database.sql`
 ## Aktualizacja istniejącej bazy
 
 Skrypt `database/database.sql` jest importowany tylko przy **pustym** katalogu danych
-(`data/mysql`). Jeśli baza już istnieje, nowe kolumny i tabele z etapu 2 (`users.failed_attempts`,
-`users.locked_until`, tabela `password_resets`) trzeba dołożyć jedną z dwóch ścieżek:
+(`data/mysql`). Jeśli baza już istnieje, nowe kolumny i tabele z etapu 2 trzeba dołożyć
+jedną z dwóch ścieżek:
 
-**(a) Zachowujemy dane** — stosujemy migrację (stos musi działać):
+**(a) Zachowujemy dane** — stosujemy migracje po kolei (stos musi działać):
 
 `docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < database/migrations/002-etap2.sql`
 
-Migracja jest idempotentna: sprawdza `information_schema` przed każdym `ALTER TABLE`
+`docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < database/migrations/003-etap2.sql`
+
+Migracje są idempotentne: sprawdzają `information_schema` przed każdym `ALTER TABLE`
 (MySQL 8.0 nie ma `ADD COLUMN IF NOT EXISTS`), więc ponowne uruchomienie nic nie psuje.
+Migracja `002` dodaje `users.failed_attempts`, `users.locked_until` i tabelę `password_resets`;
+`003` dodaje `users.email_verified_at` oraz tabele `email_verifications` i `email_sends`,
+a istniejące konta oznacza jako potwierdzone (`email_verified_at = NOW()`), żeby nie zablokować
+dostępu po włączeniu weryfikacji e-mail.
 
 **(b) Dane są nieważne** — zaczynamy od zera:
 
@@ -314,14 +320,28 @@ Konfiguracja lokalna jest w pliku `.env` (wzorem jest `.env.example`). Ustawiamy
 * `APP_URL` — publiczny adres aplikacji bez końcowego `/`; z niego (i tylko z niego) powstają linki
   absolutne przez helper `absoluteUrl()`. Lokalnie `http://localhost:8082` (domyślnie), na serwerze
   `https://owc.dziadu.dev`; w `prod` jest wymagany i musi zaczynać się od `https://`,
-* `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `SMTP_FROM_NAME` — konfiguracja
-  poczty zarezerwowana pod wysyłkę maili (reset hasła, weryfikacja e-mail); w aktualnym kodzie
-  nie jest jeszcze używana, a prawdziwe dane dostępowe trzymamy wyłącznie w lokalnym `.env`.
+* `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `SMTP_FROM_NAME` — relay SMTP
+  używany przez wysyłkę maili (potwierdzenie e-mail, reset hasła). Prawdziwe dane dostępowe
+  trzymamy wyłącznie w lokalnym `.env` (wzór w `.env.example`, domyślnie puste = wysyłka wyłączona).
+
+**Poczta (SMTP relay).** Port 25 wychodzący jest blokowany (Azure, typowy ISP), a Cloudflare Tunnel
+obsługuje tylko ruch przychodzący, więc SMTP przez tunel nie przejdzie. Dlatego wysyłamy przez
+relay SMTP z uwierzytelnianiem na porcie 587: `msmtp` w kontenerze przekazuje `mail()` PHP do
+relaya. `/etc/msmtprc` powstaje przy starcie kontenera z `.env` (`docker/php/entrypoint.sh`),
+ma prawa `600` i właściciela `www-data`, więc hasło nie trafia do obrazu. Nadawca to
+`owc@dziadu.dev` z nazwą „Ostatni Worek Cementu”. W DNS domeny `dziadu.dev` ustawiamy rekordy
+dostarczalności: SPF (`v=spf1 include:... ~all` — istniejący wpis trzeba scalić, nie dublować),
+DKIM od dostawcy oraz DMARC (na start `p=none`).
 
 **Reverse proxy.** Za tunelem Cloudflare aplikacja widzi zwykłe HTTP, dlatego protokół wykrywa z
 `X-Forwarded-Proto` / `CF-Visitor`. Te nagłówki są wiarygodne tylko dlatego, że origin jest
 osiągalny wyłącznie przez tunel (porty na pętli lokalnej, `BIND_ADDR=127.0.0.1`) — kod dodatkowo
 ignoruje je dla żądań z adresów publicznych.
+
+**Weryfikacja e-mail (polityka B).** Konto musi mieć potwierdzony adres, żeby się zalogować.
+Link z kodem ważny 24 godziny wysyłany jest po rejestracji; ponowną wysyłkę ogranicza cooldown
+60 s i limit 3 na godzinę (liczniki w bazie `email_sends`). Konta testowe i konta istniejące
+przed tą zmianą są oznaczone jako potwierdzone, więc QA i demo działają bez zmian.
 
 Plik `config/config.php` czyta te zmienne i przy ich braku zgłasza jasny błąd.
 
@@ -355,6 +375,12 @@ Podczas wdrażania aplikacji w środowisku produkcyjnym należy zadbać między 
   identyfikator sesji.
 * **Reset hasła tokenem jednorazowym:** token w linku jest losowy, w bazie trzymany tylko jako SHA-256
   (`password_resets`), ważny 1 godzinę i usuwany po użyciu; komunikat nie zdradza, czy konto istnieje.
+  Link wysyłany jest mailem (relay SMTP), a wysyłkę ogranicza cooldown 60 s i limit 3/godzinę.
+* **Weryfikacja adresu e-mail (polityka B):** po rejestracji wysyłamy link z tokenem (SHA-256 w bazie,
+  ważny 24 godziny); logowanie dozwolone dopiero po potwierdzeniu. Ponowna wysyłka ma te same limity,
+  a komunikaty nie ujawniają, czy konto istnieje. Konta testowe są oznaczone jako potwierdzone.
+* **Wysyłka poczty bez Composera:** `msmtp` w kontenerze przekazuje `mail()` PHP do relaya SMTP (587);
+  konfiguracja z `.env` powstaje przy starcie i nie trafia do obrazu. Awaria SMTP daje neutralny komunikat.
 * **Bezpieczne zarządzanie sesją:** `use_strict_mode`, `httponly`, `samesite=Lax`, `cookie_secure` w `prod`
   po HTTPS oraz tokeny CSRF we wszystkich formularzach (logout wyłącznie przez POST + CSRF).
 
@@ -397,6 +423,8 @@ Projekt jest rozwijany w ramach prac nad systemem rezerwacji usług budowlanych.
 | 10 | `APP_URL` i linki absolutne za reverse proxy (#18) | ukończone |
 | 11 | Migracje dla istniejących baz (#19) | ukończone |
 | 12 | README, struktura i porządki w repo (#20) | ukończone |
+| 13 | Poczta: relay SMTP (msmtp), reset hasła i limity wysyłek (#71) | ukończone |
+| 14 | Weryfikacja adresu e-mail po rejestracji, polityka B (#72) | ukończone |
 
 Kolejne elementy systemu mogą obejmować rozwój panelu pracownika i administratora
 (usługi, harmonogramy, rezerwacje) oraz dalsze usprawnienia procesu obsługi rezerwacji.

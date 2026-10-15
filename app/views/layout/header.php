@@ -23,4 +23,10 @@
             <?php endif; ?>
         </nav>
     </header>
+    <?php if (!empty($_SESSION['user_id']) && !currentUserEmailVerified()): ?>
+        <p role="alert" class="email-verify-banner">
+            Twój adres e-mail nie został jeszcze potwierdzony.
+            <a href="/?page=verify-email">Wyślij link ponownie</a>.
+        </p>
+    <?php endif; ?>
     <main>

@@ -40,3 +40,24 @@ function sendMail(array $config, string $to, string $subject, string $body): boo
         return false;
     }
 }
+
+// Tworzy jednorazowy token weryfikacji e-maila (jeden aktywny na konto),
+// zapisuje w bazie tylko jego SHA-256 i wysyła link z APP_URL.
+function sendVerificationEmail(array $config, int $userId, string $email, string $firstName): bool
+{
+    $token = bin2hex(random_bytes(32));
+    $expiresAt = date('Y-m-d H:i:s', time() + 24 * 3600);
+
+    $verifications = new EmailVerification(Database::connect($config['db']));
+    $verifications->deleteByUserId($userId);
+    $verifications->create($userId, hash('sha256', $token), $expiresAt);
+
+    $link = absoluteUrl('/?page=verify-email&token=' . $token);
+    $body = 'Dzień dobry' . ($firstName !== '' ? ', ' . $firstName : '') . ',' . "\r\n\r\n"
+        . 'dziękujemy za rejestrację w Systemie Rezerwacji Usług Budowlanych.' . "\r\n"
+        . 'Aby potwierdzić adres e-mail, otwórz link (ważny 24 godziny):' . "\r\n\r\n"
+        . $link . "\r\n\r\n"
+        . 'Jeśli to nie Ty zakładałeś konto, zignoruj tę wiadomość.' . "\r\n";
+
+    return sendMail($config, $email, 'Potwierdź adres e-mail', $body);
+}

@@ -23,10 +23,12 @@ require BASE_PATH . '/app/helpers/mail.php';
 require BASE_PATH . '/app/models/Database.php';
 require BASE_PATH . '/app/models/User.php';
 require BASE_PATH . '/app/models/PasswordReset.php';
+require BASE_PATH . '/app/models/EmailVerification.php';
 require BASE_PATH . '/app/models/EmailSend.php';
 require BASE_PATH . '/app/controllers/HomeController.php';
 require BASE_PATH . '/app/controllers/AuthController.php';
 require BASE_PATH . '/app/controllers/PasswordResetController.php';
+require BASE_PATH . '/app/controllers/EmailVerificationController.php';
 require BASE_PATH . '/app/controllers/ProfileController.php';
 require BASE_PATH . '/app/controllers/DashboardController.php';
 
@@ -107,6 +109,10 @@ switch ($page) {
 
     case 'reset-password':
         (new PasswordResetController($config))->resetPassword();
+        break;
+
+    case 'verify-email':
+        (new EmailVerificationController($config))->verify();
         break;
 
     default:

@@ -13,7 +13,7 @@ class User
     {
         $statement = $this->pdo->prepare(
             'SELECT id, first_name, last_name, email, password, role, is_active,
-                    failed_attempts, locked_until
+                    failed_attempts, locked_until, email_verified_at
              FROM users
              WHERE email = :email
              LIMIT 1'
@@ -27,7 +27,7 @@ class User
     public function findById(int $id): ?array
     {
         $statement = $this->pdo->prepare(
-            'SELECT id, first_name, last_name, email, phone, role, is_active
+            'SELECT id, first_name, last_name, email, phone, role, is_active, email_verified_at
              FROM users
              WHERE id = :id
              LIMIT 1'
@@ -132,6 +132,15 @@ class User
     {
         $statement = $this->pdo->prepare(
             'UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = :id'
+        );
+        $statement->execute(['id' => $id]);
+    }
+
+    // Oznacza adres e-mail jako potwierdzony (data tylko przy pierwszym potwierdzeniu).
+    public function markEmailVerified(int $id): void
+    {
+        $statement = $this->pdo->prepare(
+            'UPDATE users SET email_verified_at = NOW() WHERE id = :id AND email_verified_at IS NULL'
         );
         $statement->execute(['id' => $id]);
     }

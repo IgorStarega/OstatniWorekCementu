@@ -21,6 +21,12 @@ function currentUserRole(): ?string
     return null;
 }
 
+// Czy zalogowany użytkownik potwierdził adres e-mail? (false dla gościa)
+function currentUserEmailVerified(): bool
+{
+    return !empty($_SESSION['email_verified']);
+}
+
 // Wymaga zalogowania; gościa odsyła na stronę logowania.
 function requireLogin(): void
 {
