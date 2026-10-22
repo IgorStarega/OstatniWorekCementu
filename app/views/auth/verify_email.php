@@ -4,6 +4,11 @@
     <p role="<?= $status === 'error' ? 'alert' : 'status' ?>"><?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?></p>
 <?php endif; ?>
 
+<?php if (!empty($verificationLink)): ?>
+    <p role="status">Link potwierdzający:
+        <a href="<?= htmlspecialchars($verificationLink, ENT_QUOTES, 'UTF-8') ?>">potwierdź adres e-mail</a></p>
+<?php endif; ?>
+
 <?php foreach ($errors as $error): ?>
     <p role="alert"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></p>
 <?php endforeach; ?>

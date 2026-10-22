@@ -3,8 +3,7 @@
 # Smoke test QA — OstatniWorekCementu
 #
 # Odpala się przeciw DZIAŁAJĄCEMU stosowi docker compose. Zakłada:
-#   * APP_ENV=local oraz pusty SMTP_HOST (tryb bez wysyłki — link weryfikacyjny
-#     pokazywany jest wtedy na ekranie i można go przetestować),
+#   * APP_ENV=local (linki weryfikacji i resetu hasła są pokazywane na ekranie),
 #   * bazę z danymi testowymi (database/database.sql), w tym konto
 #     tomasz.zielinski@example.com do testu blokady.
 #
@@ -124,7 +123,7 @@ else
     fail "4. POST register bez CSRF = 403" "otrzymano $code"
 fi
 
-# --- 5. Rejestracja pełna: link fallback (SMTP pusty, local) -------------
+# --- 5. Rejestracja pełna: link na ekranie (local) -----------------------
 CSRF=$(get_csrf "$BASE_URL/?page=register" "$JAR_GUEST")
 code=$(req POST "$BASE_URL/?page=register" -b "$JAR_GUEST" -c "$JAR_GUEST" \
     --data-urlencode "csrf_token=$CSRF" \
@@ -132,10 +131,10 @@ code=$(req POST "$BASE_URL/?page=register" -b "$JAR_GUEST" -c "$JAR_GUEST" \
     --data-urlencode "email=$SMOKE_EMAIL" --data-urlencode "phone=500600700" \
     --data-urlencode "password=Haslo123!" --data-urlencode "password_confirmation=Haslo123!")
 TOKEN=$(grep -oP 'verify-email(?:&amp;|&)token=\K[0-9a-f]+' "$TMP/body" | head -1)
-if grep -q 'link potwierdzający' "$TMP/body" && [ -n "$TOKEN" ]; then
-    pass "5. Rejestracja zwraca link potwierdzający (local, brak SMTP)"
+if grep -q 'Link potwierdzający' "$TMP/body" && [ -n "$TOKEN" ]; then
+    pass "5. Rejestracja zwraca link potwierdzający (link na ekranie)"
 else
-    fail "5. Rejestracja zwraca link potwierdzający (local, brak SMTP)" "kod=$code, token pusty lub brak linku"
+    fail "5. Rejestracja zwraca link potwierdzający (link na ekranie)" "kod=$code, token pusty lub brak linku"
 fi
 
 # --- 6. Weryfikacja e-mail tokenem --------------------------------------
@@ -165,6 +164,28 @@ if [ "$code" = "302" ] && grep -q 'Zalogowano jako' "$TMP/body"; then
 else
     fail "8. Logowanie nowego konta działa" "login=$code, profil=$code2"
 fi
+
+# --- 8a. Logowanie trzech ról -------------------------------------------
+# Każda rola trafia na swoją stronę startową: panel (admin/pracownik) lub profil (klient).
+for entry in \
+    "admin@ostatniworekcementu.pl|dashboard" \
+    "jan.kowalski@example.com|dashboard" \
+    "anna.kowalska@example.com|profile"; do
+    creds=${entry%%|*}
+    page=${entry##*|}
+    JAR="$TMP/role_$RANDOM.txt"
+    CSRF=$(get_csrf "$BASE_URL/?page=login" "$JAR")
+    code=$(req POST "$BASE_URL/?page=login" -b "$JAR" -c "$JAR" \
+        --data-urlencode "csrf_token=$CSRF" \
+        --data-urlencode "email=$creds" --data-urlencode "password=Haslo123!")
+    code2=$(req GET "$BASE_URL/?page=$page" -b "$JAR" -c "$JAR")
+    if [ "$code" = "302" ] && [ "$code2" = "200" ] \
+       && ! grep -qE 'Fatal error|Warning|Uncaught' "$TMP/body"; then
+        pass "8a. logowanie $creds -> 200 bez błędów"
+    else
+        fail "8a. logowanie $creds" "login=$code $page=$code2"
+    fi
+done
 
 # --- 9. Duplikat e-maila ------------------------------------------------
 CSRF=$(get_csrf "$BASE_URL/?page=register" "$JAR_GUEST")
@@ -313,7 +334,7 @@ else
 fi
 
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------
-skip "Widok 500 przy błędnym DB_PASS" "wymaga restartu kontenera z innym DB_PASS (env_file); nie testujemy w tym przebiegu"
+skip "Widok 500 przy błędnym DB_PASS" "wymaga restartu kontenera z innym DB_PASS (environment w compose); nie testujemy w tym przebiegu"
 skip "Wizualna ocena formularzy / responsywność / czytelność błędów" "wymaga przeglądarki — patrz tools/qa-manual.md"
 
 # --- podsumowanie --------------------------------------------------------

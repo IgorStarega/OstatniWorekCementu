@@ -2,7 +2,7 @@
 
 Uzupełnienie `tools/qa-smoke.sh` (automat). Rzeczy, których nie da się sprawdzić
 curl em: ocena wizualna i użyteczność. Wymagania wstępne: `docker compose up -d`,
-`APP_ENV=local`, pusty `SMTP_HOST`, dane testowe z `database/database.sql`
+`APP_ENV=local` (linki potwierdzenia i resetu są widoczne na ekranie), dane testowe z `database/database.sql`
 (hasło kont: `Haslo123!`).
 
 Adres: <http://localhost:8082/>
@@ -12,8 +12,8 @@ Adres: <http://localhost:8082/>
 - [ ] **Strona główna** — nagłówek, nawigacja i treść czytelne, brak rozjechanych elementów.
 - [ ] **Rejestracja** — wszystkie pola z etykietami, kolejność logiczna, hasło ukryte.
 - [ ] **Logowanie** — komunikat błędu widoczny i zrozumiały; link „Nie pamiętam hasła" działa.
-- [ ] **Reset hasła** — w trybie `local` po wysłaniu formularza pojawia się link do resetu.
-- [ ] **Weryfikacja e-mail** — po rejestracji w `local` link potwierdzający jest widoczny na ekranie.
+- [ ] **Reset hasła** — po wysłaniu formularza pojawia się link do resetu.
+- [ ] **Weryfikacja e-mail** — po rejestracji link potwierdzający jest widoczny na ekranie.
 - [ ] **Profil** — formularz danych i formularz zmiany hasła rozdzielone; po zapisie widać
       komunikat „Dane profilu zostały zapisane.".
 - [ ] **Walidacja** — puste pola, za krótkie imię, błędny e-mail i telefon pokazują czytelne

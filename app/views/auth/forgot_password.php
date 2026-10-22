@@ -9,7 +9,8 @@
 <?php endforeach; ?>
 
 <?php if ($resetLink !== ''): ?>
-    <p role="status">Tryb lokalny (brak wysyłki e-mail): <a href="<?= htmlspecialchars($resetLink, ENT_QUOTES, 'UTF-8') ?>">link do resetu hasła</a></p>
+    <p role="status">Link do resetu hasła:
+        <a href="<?= htmlspecialchars($resetLink, ENT_QUOTES, 'UTF-8') ?>">ustaw nowe hasło</a></p>
 <?php endif; ?>
 
 <form method="post" action="/?page=forgot-password">

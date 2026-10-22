@@ -92,7 +92,7 @@ Szczegółowa konfiguracja aplikacji znajduje się w katalogach:
 
 ## Baza danych
 
-System korzysta z relacyjnej bazy danych odpowiedzialnej za przechowywanie informacji związanych z użytkownikami, usługami oraz rezerwacjami.
+System korzysta z relacyjnej bazy danych odpowiedzialnej za przechowywanie informacji związanych z użytkownikami, usługami oraz rezerwacjami. Schemat obejmuje **10 tabel**.
 
 Baza danych umożliwia między innymi przechowywanie:
 
@@ -193,13 +193,13 @@ Główna struktura repozytorium:
 > ├── app/                # logika aplikacji (MVC)
 > │   ├── controllers/    # kontrolery (Home, Auth, PasswordReset, EmailVerification, Profile, Dashboard)
 > │   ├── models/         # modele (Database, User, PasswordReset, EmailVerification, EmailSend)
-> │   ├── helpers/        # pomocniki (CSRF, autoryzacja, walidacja, adresy URL, poczta)
+> │   ├── helpers/        # pomocniki (CSRF, autoryzacja, walidacja, adresy URL, tokeny)
 > │   └── views/          # widoki (layout, strony, errors/ — 403/404/500)
 > ├── config/             # konfiguracja aplikacji i serwera MySQL
 > │   └── mysql/
 > ├── database/           # schemat, dane testowe i scalony zrzut
 > │   └── migrations/     # migracje dla istniejących baz (002-etap2.sql, 003-etap2.sql)
-> ├── docker/             # obraz PHP + konfiguracja Apache
+> ├── docker/             # obraz PHP, php.ini i konfiguracja Apache
 > │   └── php/
 > ├── docs/               # dokumentacja (diagram ERD)
 > ├── public/             # publiczny katalog serwera (front controller)
@@ -264,7 +264,8 @@ Skopiuj wzór konfiguracji i w razie potrzeby dostosuj wartości:
 `cp .env.example .env`
 
 Plik `.env` jest w `.gitignore` — nie commitujemy go. Zawiera dane dostępowe MySQL,
-phpMyAdmin oraz ustawienia portów (`BIND_ADDR`) i strefy czasowej (`TZ`).
+phpMyAdmin oraz ustawienia portów (`BIND_ADDR`). Strefa czasowa jest stała
+(`Europe/Warsaw`) i wpisana bezpośrednio w `docker-compose.yml`.
 
 ### 3. Uruchomienie stosu
 
@@ -310,17 +311,17 @@ dostępu po włączeniu weryfikacji e-mail.
 
 ## Testy
 
-Automatyczny smoke test (20 punktów: sesja, CSRF, rejestracja z linkiem, weryfikacja, XSS, IDOR,
-role, blokada konta, schemat bazy, migracje, retencja) uruchamiamy przeciw działającemu stosowi:
+Automatyczny smoke test (23 punkty: sesja, CSRF, rejestracja z linkiem, weryfikacja, XSS, IDOR,
+trzy role, blokada konta, schemat bazy, migracje, retencja) uruchamiamy przeciw działającemu stosowi:
 
 ```bash
 bash tools/qa-smoke.sh
 ```
 
-Skrypt wymaga tylko `bash`, `curl`, `docker compose` i `grep`, zakłada `APP_ENV=local` z pustym
-`SMTP_HOST`, jest idempotentny i po sobie sprząta. Wynik to `X/Y PASS`; kod wyjścia `1`, gdy
-cokolwiek padło. Rzeczy wymagające przeglądarki (ocena wizualna, responsywność, czytelność błędów)
-są w checkliście `tools/qa-manual.md`.
+Skrypt wymaga tylko `bash`, `curl`, `docker compose` i `grep`, zakłada `APP_ENV=local`
+(linki potwierdzenia i resetu są widoczne na ekranie), jest idempotentny i po sobie sprząta.
+Wynik to `X/Y PASS`; kod wyjścia `1`, gdy cokolwiek padło. Rzeczy wymagające przeglądarki
+(ocena wizualna, responsywność, czytelność błędów) są w checkliście `tools/qa-manual.md`.
 
 ---
 
@@ -328,31 +329,21 @@ są w checkliście `tools/qa-manual.md`.
 
 Konfiguracja lokalna jest w pliku `.env` (wzorem jest `.env.example`). Ustawiamy tam m.in.:
 
-* `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS` — połączenie aplikacji z bazą,
-* `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` — inicjalizacja MySQL,
-* `PMA_HOST`, `PMA_PORT`, `PMA_USER`, `PMA_PASSWORD`, `PMA_ARBITRARY` — phpMyAdmin,
-* `BIND_ADDR` — interfejs publikowanych portów, `TZ` — strefa czasowa,
 * `APP_ENV` — `local` albo `prod` (w `prod` włączane jest `session.cookie_secure`, o ile żądanie
   przyszło po HTTPS — także za reverse proxy),
 * `APP_URL` — publiczny adres aplikacji bez końcowego `/`; z niego (i tylko z niego) powstają linki
   absolutne przez helper `absoluteUrl()`. Lokalnie `http://localhost:8082` (domyślnie), na serwerze
   `https://owc.dziadu.dev`; w `prod` jest wymagany i musi zaczynać się od `https://`,
-* `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `SMTP_FROM_NAME` — relay SMTP
-  używany przez wysyłkę maili (potwierdzenie e-mail, reset hasła). Prawdziwe dane dostępowe
-  trzymamy wyłącznie w lokalnym `.env` (wzór w `.env.example`, domyślnie puste = wysyłka wyłączona),
 * `TRUSTED_PROXY_IPS` — opcjonalna lista zaufanych adresów reverse proxy (pojedyncze IP lub zapisy
   CIDR, np. `172.18.0.2`, `172.18.0.0/16`), rozdzielona przecinkami. Domyślnie **pusta** — nie
   ufamy całej prywatnej puli Dockera. Ustawiamy konkretny adres kontenera tunelu (np. `cloudflared`),
-  żeby działała detekcja HTTPS z `X-Forwarded-Proto` (patrz „Reverse proxy").
-
-**Poczta (SMTP relay).** Port 25 wychodzący jest blokowany (Azure, typowy ISP), a Cloudflare Tunnel
-obsługuje tylko ruch przychodzący, więc SMTP przez tunel nie przejdzie. Dlatego wysyłamy przez
-relay SMTP z uwierzytelnianiem na porcie 587: `msmtp` w kontenerze przekazuje `mail()` PHP do
-relaya. `/etc/msmtprc` powstaje przy starcie kontenera z `.env` (`docker/php/entrypoint.sh`),
-ma prawa `600` i właściciela `www-data`, więc hasło nie trafia do obrazu. Nadawca to
-`owc@dziadu.dev` z nazwą „Ostatni Worek Cementu”. W DNS domeny `dziadu.dev` ustawiamy rekordy
-dostarczalności: SPF (`v=spf1 include:... ~all` — istniejący wpis trzeba scalić, nie dublować),
-DKIM od dostawcy oraz DMARC (na start `p=none`).
+  żeby działała detekcja HTTPS z `X-Forwarded-Proto` (patrz „Reverse proxy”),
+* `BIND_ADDR` — interfejs publikowanych portów (domyślnie `127.0.0.1`, czyli tylko lokalnie),
+* `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` — inicjalizacja MySQL,
+  a `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS` dla aplikacji compose wyprowadza
+  automatycznie z `MYSQL_*` i stałych wartości (`db`, `3306`) — nie trzeba ich dublować w `.env`,
+* `PMA_USER`, `PMA_PASSWORD` — dane logowania do phpMyAdmin (host i port są stałe
+  w `docker-compose.yml`).
 
 **Reverse proxy.** Za tunelem Cloudflare aplikacja widzi zwykłe HTTP, dlatego protokół wykrywa z
 `X-Forwarded-Proto` / `CF-Visitor`. Pętla lokalna (`127.*`, `::1`) jest zaufana zawsze; adresy
@@ -362,16 +353,18 @@ pętli lokalnej, `BIND_ADDR=127.0.0.1`) — dlatego domyślnie lista jest pusta,
 nagłówki dla żądań z nieznanych adresów.
 
 **Weryfikacja e-mail (polityka B).** Konto musi mieć potwierdzony adres, żeby się zalogować.
-Link z kodem ważny 24 godziny wysyłany jest po rejestracji; ponowną wysyłkę ogranicza cooldown
-60 s i limit 3 na godzinę (liczniki w bazie `email_sends`). Konta testowe i konta istniejące
-przed tą zmianą są oznaczone jako potwierdzone, więc QA i demo działają bez zmian.
+Po rejestracji aplikacja generuje link z tokenem (w bazie trzymany jest wyłącznie hash SHA-256,
+ważny 24 godziny) i pokazuje go bezpośrednio na ekranie — nie ma transportu poczty. Ponowne
+wygenerowanie linku ogranicza cooldown 60 s i limit 3 na godzinę (liczniki w bazie `email_sends`).
+Konta testowe i konta istniejące przed tą zmianą są oznaczone jako potwierdzone, więc QA i demo
+działają bez zmian.
 
-> **Uwaga operacyjna (wdrożenie).** Sesje utworzone przed wdrożeniem weryfikacji nie mają klucza
-> `email_verified`. Kod radzi sobie z tym, dociągając stan z bazy (`EmailVerificationController`),
-> ale bezpieczniej po wdrożeniu poprosić użytkowników o ponowne zalogowanie — najprościej
-> wyczyścić sesje serwera.
+> **Uwaga operacyjna (wdrożenie).** Kontroler potwierdzenia e-mail ustala stan konta na podstawie
+> bazy (`email_verified_at`), więc nie zależy od danych zapisanych w starej sesji. Po wdrożeniu
+> i tak warto poprosić użytkowników o ponowne zalogowanie — najprościej wyczyścić sesje serwera.
 
-Plik `config/config.php` czyta te zmienne i przy ich braku zgłasza jasny błąd.
+Plik `config/config.php` czyta `DB_*` oraz `APP_*` (przekazywane przez compose) i przy ich braku
+zgłasza jasny błąd.
 
 **Nie należy umieszczać prawdziwych haseł oraz danych dostępowych do produkcyjnej bazy danych w repozytorium Git.**
 
@@ -403,14 +396,13 @@ Podczas wdrażania aplikacji w środowisku produkcyjnym należy zadbać między 
   identyfikator sesji.
 * **Reset hasła tokenem jednorazowym:** token w linku jest losowy, w bazie trzymany tylko jako SHA-256
   (`password_resets`), ważny 1 godzinę i usuwany po użyciu; komunikat nie zdradza, czy konto istnieje.
-  Link wysyłany jest mailem (relay SMTP), a wysyłkę ogranicza cooldown 60 s i limit 3/godzinę.
-* **Weryfikacja adresu e-mail (polityka B):** po rejestracji wysyłamy link z tokenem (SHA-256 w bazie,
-  ważny 24 godziny); logowanie dozwolone dopiero po potwierdzeniu. Ponowna wysyłka ma te same limity,
-  a komunikaty nie ujawniają, czy konto istnieje. Konta testowe są oznaczone jako potwierdzone.
-  W trybie `local` bez skonfigurowanego SMTP link potwierdzający pokazujemy na ekranie
-  (analogicznie do resetu hasła), więc konto da się potwierdzić i zalogować bez poczty.
-* **Wysyłka poczty bez Composera:** `msmtp` w kontenerze przekazuje `mail()` PHP do relaya SMTP (587);
-  konfiguracja z `.env` powstaje przy starcie i nie trafia do obrazu. Awaria SMTP daje neutralny komunikat.
+  Link jest generowany i pokazywany na ekranie, a jego tworzenie ogranicza cooldown 60 s i limit
+  3/godzinę.
+* **Weryfikacja adresu e-mail (polityka B):** po rejestracji generujemy link z tokenem (SHA-256 w bazie,
+  ważny 24 godziny); logowanie dozwolone dopiero po potwierdzeniu. Ponowne wygenerowanie linku ma te
+  same limity (60 s / 3 na godzinę), a komunikaty nie ujawniają, czy konto istnieje. Konta testowe są
+  oznaczone jako potwierdzone. Link potwierdzający jest pokazywany na ekranie, więc konto da się
+  potwierdzić i zalogować bez transportu poczty.
 * **Bezpieczne zarządzanie sesją:** `use_strict_mode`, `httponly`, `samesite=Lax`, `cookie_secure` w `prod`
   po HTTPS oraz tokeny CSRF we wszystkich formularzach (logout wyłącznie przez POST + CSRF).
 
@@ -453,8 +445,9 @@ Projekt jest rozwijany w ramach prac nad systemem rezerwacji usług budowlanych.
 | 10 | `APP_URL` i linki absolutne za reverse proxy (#18) | ukończone |
 | 11 | Migracje dla istniejących baz (#19) | ukończone |
 | 12 | README, struktura i porządki w repo (#20) | ukończone |
-| 13 | Poczta: relay SMTP (msmtp), reset hasła i limity wysyłek (#71) | ukończone |
+| 13 | Reset hasła i limity wysyłek (#71) | ukończone |
 | 14 | Weryfikacja adresu e-mail po rejestracji, polityka B (#72) | ukończone |
+| 15 | Usunięcie transportu poczty (linki na ekranie) i minimalizacja `.env` | ukończone |
 
 Kolejne elementy systemu mogą obejmować rozwój panelu pracownika i administratora
 (usługi, harmonogramy, rezerwacje) oraz dalsze usprawnienia procesu obsługi rezerwacji.

@@ -21,12 +21,6 @@ function currentUserRole(): ?string
     return null;
 }
 
-// Czy zalogowany użytkownik potwierdził adres e-mail? (false dla gościa)
-function currentUserEmailVerified(): bool
-{
-    return !empty($_SESSION['email_verified']);
-}
-
 // Wymaga zalogowania; gościa odsyła na stronę logowania.
 function requireLogin(): void
 {
@@ -58,14 +52,15 @@ function userRepository(array $config): User
 }
 
 // Imię zalogowanego użytkownika pobierane z bazy (sesja trzyma tylko user_id i role).
-function currentUserFirstName(): string
+function currentUserFirstName(array $config = []): string
 {
+    $config = $config ?: ($GLOBALS['config'] ?? []);
+
     $userId = currentUserId();
     if ($userId === null) {
         return 'Użytkownik';
     }
 
-    $config = $GLOBALS['config'] ?? [];
     if (empty($config['db'])) {
         return 'Użytkownik';
     }
