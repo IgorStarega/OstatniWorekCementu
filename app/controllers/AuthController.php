@@ -53,8 +53,7 @@ class AuthController
                     && password_verify($password, $user['password'])) {
                     // Polityka B: konto bez potwierdzonego e-maila nie może się zalogować.
                     if (empty($user['email_verified_at'])) {
-                        $errors[] = 'Najpierw potwierdź adres e-mail. Sprawdź skrzynkę '
-                            . 'lub wyślij link ponownie na stronie potwierdzenia.';
+                        $errors[] = 'Najpierw potwierdź adres e-mail. Link był wyświetlony po rejestracji.';
                     } else {
                         $users->clearFailedLogins((int) $user['id']);
 
@@ -66,7 +65,6 @@ class AuthController
                         // W sesji trzymamy wyłącznie user_id i role (bez hasła i danych osobowych).
                         $_SESSION['user_id'] = (int) $user['id'];
                         $_SESSION['role'] = $user['role'];
-                        $_SESSION['email_verified'] = true;
 
                         header('Location: ' . $this->homeForRole((string) $user['role']));
                         exit;
@@ -192,26 +190,11 @@ class AuthController
                             password_hash($password, PASSWORD_DEFAULT),
                             'klient'
                         );
-                        // Token zapisujemy PRZED próbą wysyłki — dzięki temu fallback
-                        // w trybie lokalnym ma czym potwierdzić konto.
+                        // Token zapisujemy od razu — link pokazujemy na ekranie,
+                        // więc nie zależy on od żadnej zewnętrznej wysyłki.
                         $token = issueEmailVerificationToken($this->config, $userId);
-                        $sent = sendVerificationEmail($this->config, $email, $firstName, $token);
-
-                        if ($sent) {
-                            $message = 'Konto utworzone. Sprawdź skrzynkę e-mail i potwierdź adres, '
-                                . 'aby się zalogować.';
-                        } elseif (($this->config['app']['env'] ?? 'local') === 'local') {
-                            // Brak SMTP w trybie lokalnym: pokazujemy link na ekranie
-                            // (ten sam wzorzec co przy resecie hasła).
-                            $verificationLink = absoluteUrl('/?page=verify-email&token=' . $token);
-                            $message = 'Konto utworzone. Tryb lokalny (brak wysyłki e-mail) — '
-                                . 'potwierdź adres linkiem poniżej.';
-                        } else {
-                            // prod: SMTP ma działać. Szczegóły tylko do logu, bez obietnic wobec użytkownika.
-                            error_log('Weryfikacja e-mail: wysyłka nie powiodła się dla user_id=' . $userId);
-                            $message = 'Konto utworzone. Jeśli nie otrzymasz wiadomości, '
-                                . 'użyj opcji ponownej wysyłki.';
-                        }
+                        $verificationLink = absoluteUrl('/?page=verify-email&token=' . $token);
+                        $message = 'Konto utworzone. Potwierdź adres linkiem poniżej, aby się zalogować.';
 
                         // Wyczyszczenie formularza po pomyślnym utworzeniu konta
                         $firstName = '';

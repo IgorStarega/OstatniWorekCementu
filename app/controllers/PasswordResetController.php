@@ -1,5 +1,5 @@
 <?php
-// Odzyskiwanie hasła bez zewnętrznego SMTP (stretch — ocena 6).
+// Odzyskiwanie hasła bez zewnętrznego transportu poczty (stretch — ocena 6).
 // W bazie trzymamy tylko SHA-256 tokenu, sam token żyje wyłącznie w linku.
 class PasswordResetController
 {
@@ -57,19 +57,16 @@ class PasswordResetController
                         $resets->deleteByEmail($email);
                         $resets->create($email, hash('sha256', $token), $expiresAt);
 
-                        // Link absolutny z APP_URL — poprawny host w mailu.
+                        // Link absolutny z APP_URL — poprawny host niezależnie od żądania.
                         $link = absoluteUrl('/?page=reset-password&token=' . $token);
-                        $this->sendResetEmail($email, $user, $link);
 
-                        // Tryb lokalny (zwykle brak SMTP): pokazujemy link także na ekranie.
-                        if (($this->config['app']['env'] ?? 'local') === 'local') {
-                            $resetLink = $link;
-                        }
+                        // Link pokazujemy zawsze na ekranie — aplikacja nie wysyła poczty.
+                        $resetLink = $link;
                     }
                 }
 
                 // Ten sam komunikat niezależnie od istnienia konta (ochrona przed enumeracją).
-                $message = 'Jeśli konto z tym adresem istnieje, przygotowaliśmy instrukcję resetu hasła.';
+                $message = 'Link do resetu hasła został wygenerowany — użyj go poniżej.';
             }
         }
 
@@ -78,18 +75,7 @@ class PasswordResetController
         require BASE_PATH . '/app/views/layout/footer.php';
     }
 
-    // Treść maila resetu hasła. Token występuje wyłącznie w linku — nie logujemy go.
-    private function sendResetEmail(string $email, array $user, string $link): void
-    {
-        $body = 'Dzień dobry' . (!empty($user['first_name']) ? ', ' . $user['first_name'] : '') . ',' . "\r\n\r\n"
-            . 'otrzymaliśmy prośbę o reset hasła w Systemie Rezerwacji Usług Budowlanych.' . "\r\n"
-            . 'Aby ustawić nowe hasło, otwórz link (ważny 1 godzinę):' . "\r\n\r\n"
-            . $link . "\r\n\r\n"
-            . 'Jeśli to nie Ty, zignoruj tę wiadomość — hasło pozostanie bez zmian.' . "\r\n";
-
-        sendMail($this->config, $email, 'Reset hasła', $body);
-    }
-
+    // Ustawia nowe hasło na podstawie ważnego tokenu resetu.
     public function resetPassword(): void
     {
         if (session_status() !== PHP_SESSION_ACTIVE) {

@@ -1,5 +1,5 @@
 <?php
-// Potwierdzanie adresu e-mail po rejestracji (link z tokenem + ponowna wysyłka).
+// Potwierdzanie adresu e-mail po rejestracji (link z tokenem + ponowne wygenerowanie).
 class EmailVerificationController
 {
     // Cel wysyłki używany w dzienniku limitów (email_sends).
@@ -21,9 +21,6 @@ class EmailVerificationController
         if (!empty($_SESSION['user_id'])) {
             $current = userRepository($this->config)->findById((int) $_SESSION['user_id']);
             if ($current !== null && !empty($current['email_verified_at'])) {
-                // Sesje sprzed wdrożenia weryfikacji nie mają klucza email_verified —
-                // stan rozstrzygamy z bazy i uzupełniamy sesję na przyszłość.
-                $_SESSION['email_verified'] = true;
                 header('Location: /?page=home');
                 exit;
             }
@@ -34,6 +31,7 @@ class EmailVerificationController
         $message = '';
         $errors = [];
         $email = '';
+        $verificationLink = '';
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             csrf_verify(postString('csrf_token'));
@@ -51,13 +49,13 @@ class EmailVerificationController
                     if ($throttle->isAllowed($email, self::PURPOSE)) {
                         $throttle->record($email, self::PURPOSE);
                         $token = issueEmailVerificationToken($this->config, (int) $user['id']);
-                        sendVerificationEmail($this->config, $email, (string) $user['first_name'], $token);
+                        $verificationLink = absoluteUrl('/?page=verify-email&token=' . $token);
                     }
                 }
 
                 // Ten sam komunikat niezależnie od istnienia konta i stanu licznika
                 // (ochrona przed ujawnianiem, które adresy są w systemie).
-                $message = 'Jeśli konto z tym adresem wymaga potwierdzenia, wysłaliśmy nowy link.';
+                $message = 'Jeśli konto wymaga potwierdzenia, wygenerowaliśmy nowy link.';
             }
         } else {
             $token = is_string($_GET['token'] ?? null) ? $_GET['token'] : '';

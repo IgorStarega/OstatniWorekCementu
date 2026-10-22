@@ -19,7 +19,7 @@ require BASE_PATH . '/app/helpers/csrf.php';
 require BASE_PATH . '/app/helpers/auth.php';
 require BASE_PATH . '/app/helpers/validation.php';
 require BASE_PATH . '/app/helpers/url.php';
-require BASE_PATH . '/app/helpers/mail.php';
+require BASE_PATH . '/app/helpers/token.php';
 require BASE_PATH . '/app/models/Database.php';
 require BASE_PATH . '/app/models/User.php';
 require BASE_PATH . '/app/models/PasswordReset.php';

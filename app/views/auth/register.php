@@ -5,8 +5,8 @@
 <?php endif; ?>
 
 <?php if ($verificationLink !== ''): ?>
-    <p role="status">Tryb lokalny (brak wysyłki e-mail):
-        <a href="<?= htmlspecialchars($verificationLink, ENT_QUOTES, 'UTF-8') ?>">link potwierdzający</a></p>
+    <p role="status">Link potwierdzający:
+        <a href="<?= htmlspecialchars($verificationLink, ENT_QUOTES, 'UTF-8') ?>">potwierdź adres e-mail</a></p>
 <?php endif; ?>
 
 <?php foreach ($errors as $error): ?>
