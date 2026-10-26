@@ -308,7 +308,7 @@ else
     fail "18. Schemat: 10 tabel + kolumny users" "tabele=$TABLES"
 fi
 
-# --- 19. Migracje idempotentne (002 i 003, dwa razy) --------------------
+# --- 19. Migracje idempotentne (002, 003 i 004, dwa razy) ----------------
 MIG_OUT="$TMP/mig.txt"
 for _ in 1 2; do
     docker compose exec -T "$DB_SERVICE" sh -c \
@@ -317,11 +317,14 @@ for _ in 1 2; do
     docker compose exec -T "$DB_SERVICE" sh -c \
         'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
         < database/migrations/003-etap2.sql >>"$MIG_OUT" 2>&1
+    docker compose exec -T "$DB_SERVICE" sh -c \
+        'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
+        < database/migrations/004-poprawka-kodowania.sql >>"$MIG_OUT" 2>&1
 done
 if ! grep -qi 'ERROR' "$MIG_OUT"; then
-    pass "19. Migracje 002 i 003 idempotentne (dwa przebiegi)"
+    pass "19. Migracje 002, 003 i 004 idempotentne (dwa przebiegi)"
 else
-    fail "19. Migracje 002 i 003 idempotentne (dwa przebiegi)" "$(grep -i 'ERROR' "$MIG_OUT" | head -1)"
+    fail "19. Migracje 002, 003 i 004 idempotentne (dwa przebiegi)" "$(grep -i 'ERROR' "$MIG_OUT" | head -1)"
 fi
 
 # --- 20. Retencja email_sends -------------------------------------------
@@ -331,6 +334,72 @@ if [ "$OLD" = "0" ]; then
     pass "20. email_sends bez wpisów starszych niż 24 h"
 else
     fail "20. email_sends bez wpisów starszych niż 24 h" "starych wpisów: $OLD"
+fi
+
+# --- 21. Panel admina: dostęp tylko dla administratora -------------------
+JAR_ADMIN="$TMP/admin.txt"
+CSRF=$(get_csrf "$BASE_URL/?page=login" "$JAR_ADMIN")
+req POST "$BASE_URL/?page=login" -b "$JAR_ADMIN" -c "$JAR_ADMIN" >/dev/null \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "email=admin@ostatniworekcementu.pl" --data-urlencode "password=Haslo123!"
+
+for admin_page in admin-dashboard admin-categories admin-services \
+                  admin-employees admin-users admin-reservations; do
+    # Gość: 302 na logowanie.
+    code=$(req GET "$BASE_URL/?page=$admin_page")
+    if [ "$code" = "302" ] && grep -qi 'location:.*page=login' "$TMP/hdr"; then
+        pass "21. gość $admin_page -> 302 login"
+    else
+        fail "21. gość $admin_page -> 302 login" "otrzymano $code"
+    fi
+
+    # Klient: 403, nigdy panel.
+    code=$(req GET "$BASE_URL/?page=$admin_page" -b "$JAR_ANNA" -c "$JAR_ANNA")
+    if [ "$code" = "403" ]; then
+        pass "21. klient $admin_page -> 403"
+    else
+        fail "21. klient $admin_page -> 403" "otrzymano $code"
+    fi
+
+    # Administrator: 200 i wyrenderowany panel.
+    code=$(req GET "$BASE_URL/?page=$admin_page" -b "$JAR_ADMIN" -c "$JAR_ADMIN")
+    if [ "$code" = "200" ] && grep -q 'Panel administratora' "$TMP/body" \
+       && ! grep -qE 'Fatal error|Warning|Notice|Uncaught' "$TMP/body"; then
+        pass "21. admin $admin_page -> 200 panel"
+    else
+        fail "21. admin $admin_page -> 200 panel" "otrzymano $code"
+    fi
+done
+
+# --- 21b. Polskie znaki z bazy bez podwójnego kodowania ------------------
+code=$(req GET "$BASE_URL/?page=admin-categories" -b "$JAR_ADMIN" -c "$JAR_ADMIN")
+if [ "$code" = "200" ] && grep -q 'Ocieplanie budynków' "$TMP/body" \
+   && ! grep -q 'Ã³' "$TMP/body"; then
+    pass "21b. Polskie znaki z bazy wyświetlają się poprawnie"
+else
+    fail "21b. Polskie znaki z bazy wyświetlają się poprawnie" "kod=$code, podwójne kodowanie?"
+fi
+
+# --- 22. Link do panelu tylko dla administratora ------------------------
+req GET "$BASE_URL/?page=home" -b "$JAR_ADMIN" -c "$JAR_ADMIN" >/dev/null
+if grep -q 'page=admin-dashboard' "$TMP/body"; then
+    pass "22. administrator widzi link do panelu"
+else
+    fail "22. administrator widzi link do panelu" "brak linku"
+fi
+
+req GET "$BASE_URL/?page=home" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null
+if ! grep -q 'page=admin-dashboard' "$TMP/body"; then
+    pass "22. klient nie widzi linku do panelu"
+else
+    fail "22. klient nie widzi linku do panelu" "link widoczny"
+fi
+
+req GET "$BASE_URL/?page=home" >/dev/null
+if ! grep -q 'page=admin-dashboard' "$TMP/body"; then
+    pass "22. gość nie widzi linku do panelu"
+else
+    fail "22. gość nie widzi linku do panelu" "link widoczny"
 fi
 
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------

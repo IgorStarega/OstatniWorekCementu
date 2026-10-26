@@ -383,6 +383,10 @@ COMMIT;
 -- OSTATNI WOREK CEMENTU
 -- =========================================
 
+-- Struktura powyżej przywraca character_set_client z połączenia, dlatego przed
+-- danymi ponownie ustawiamy utf8mb4 — inaczej polskie znaki byłyby podwójnie kodowane.
+SET NAMES utf8mb4;
+
 -- KATEGORIE USŁUG
 
 INSERT INTO service_categories (name, description) VALUES

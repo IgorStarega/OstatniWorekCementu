@@ -3,6 +3,11 @@
 -- OSTATNI WOREK CEMENTU
 -- =========================================
 
+-- Plik jest zwykle doklejany po strukturze, która na końcu przywraca
+-- character_set_client z połączenia (zwykle latin1). Bez tej linii polskie
+-- znaki zapisałyby się podwójnie zakodowane.
+SET NAMES utf8mb4;
+
 -- KATEGORIE USŁUG
 
 INSERT INTO service_categories (name, description) VALUES

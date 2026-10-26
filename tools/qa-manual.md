@@ -20,6 +20,20 @@ Adres: <http://localhost:8082/>
       komunikaty przy polach/formularzu.
 - [ ] **Błędy** — strony 403/404/500 wyglądają spójnie i nie zdradzają szczegółów technicznych.
 
+## Panel administratora
+
+- [ ] **Dostęp** — administrator widzi link „Panel administratora”, klient i gość nie.
+- [ ] **Kategorie** — dodanie, edycja i usunięcie kategorii; usunięcie kategorii z usługami
+      pokazuje komunikat z liczbą, a formularz po błędzie zachowuje wpisane wartości.
+- [ ] **Usługi** — cena `0.00` przechodzi, cena ujemna i tekst są odrzucane, czas `0` odrzucony;
+      usługa nieaktywna ma wyraźną plakietkę, a usługa z rezerwacjami nie daje się usunąć.
+- [ ] **Pracownicy** — nowy pracownik powstaje razem z kontem, duplikat e-maila jest odrzucany,
+      dezaktywacja blokuje logowanie, usunięcie pracownika z rezerwacjami pokazuje komunikat.
+- [ ] **Przypisania usług** — zaznaczenie kilku usług zapisuje je bez duplikatów, odznaczenie
+      wszystkich czyści przypisania, a podmienione ID usługi jest odrzucane.
+- [ ] **Wygląd** — industrialny ciemny motyw (grafit + żółty akcent) jest spójny na wszystkich
+      stronach, a panel działa na 375 px.
+
 ## Responsywność
 
 - [ ] **Telefon (≈375 px)** — brak poziomego przewijania, przyciski nie uciskają się,

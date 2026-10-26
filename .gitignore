@@ -13,6 +13,10 @@ config/*.local.php
 # Zależności PHP (gdyby w przyszłości doszedł Composer)
 vendor/
 
+# Wyjątek: lokalny Bootstrap dla frontendu (to nie zależność Composera)
+!public/vendor/
+!public/vendor/**
+
 # Pliki wrzucane przez użytkowników (np. awatary) — nie do repo
 public/uploads/
 
