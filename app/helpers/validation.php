@@ -61,3 +61,49 @@ function validationPassword(string $password): ?string
 
     return null;
 }
+
+// Nazwa kategorii usług: wymagana, od 2 do 100 znaków.
+function validationCategoryName(string $name): ?string
+{
+    if ($name === '' || mb_strlen($name) < 2 || mb_strlen($name) > 100) {
+        return 'Nazwa kategorii jest wymagana (od 2 do 100 znaków).';
+    }
+
+    return null;
+}
+
+// Nazwa usługi: wymagana, od 2 do 150 znaków.
+function validationServiceName(string $name): ?string
+{
+    if ($name === '' || mb_strlen($name) < 2 || mb_strlen($name) > 150) {
+        return 'Nazwa usługi jest wymagana (od 2 do 150 znaków).';
+    }
+
+    return null;
+}
+
+// Czas trwania: liczba całkowita większa od zera (minuty).
+function validationDurationMinutes(string $duration): ?string
+{
+    if (!preg_match('/^[0-9]{1,5}$/', $duration) || (int) $duration < 1) {
+        return 'Czas trwania musi być liczbą całkowitą większą od 0 minut.';
+    }
+
+    return null;
+}
+
+// Cena: liczba nieujemna, maksymalnie dwa miejsca po przecinku/kropce.
+function validationPrice(string $price): ?string
+{
+    if (!preg_match('/^[0-9]{1,8}([.,][0-9]{1,2})?$/', $price)) {
+        return 'Cena musi być liczbą większą lub równą 0 (np. 0.00 albo 1200.50).';
+    }
+
+    return null;
+}
+
+// Ujednolica cenę do formatu bazy danych (kropka, zawsze dwa miejsca po przecinku).
+function priceToDecimal(string $price): string
+{
+    return number_format((float) str_replace(',', '.', $price), 2, '.', '');
+}

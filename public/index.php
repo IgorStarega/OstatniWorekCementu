@@ -25,12 +25,17 @@ require BASE_PATH . '/app/models/User.php';
 require BASE_PATH . '/app/models/PasswordReset.php';
 require BASE_PATH . '/app/models/EmailVerification.php';
 require BASE_PATH . '/app/models/EmailSend.php';
+require BASE_PATH . '/app/models/ServiceCategory.php';
+require BASE_PATH . '/app/models/Service.php';
+require BASE_PATH . '/app/models/Employee.php';
+require BASE_PATH . '/app/models/EmployeeService.php';
 require BASE_PATH . '/app/controllers/HomeController.php';
 require BASE_PATH . '/app/controllers/AuthController.php';
 require BASE_PATH . '/app/controllers/PasswordResetController.php';
 require BASE_PATH . '/app/controllers/EmailVerificationController.php';
 require BASE_PATH . '/app/controllers/ProfileController.php';
 require BASE_PATH . '/app/controllers/DashboardController.php';
+require BASE_PATH . '/app/controllers/AdminController.php';
 
 // Nieobsłużony wyjątek: zapisujemy szczegóły do logu, a użytkownik widzi
 // neutralny widok 500 (bez ścieżek, numerów linii i stack trace).
@@ -113,6 +118,34 @@ switch ($page) {
 
     case 'verify-email':
         (new EmailVerificationController($config))->verify();
+        break;
+
+    case 'admin-dashboard':
+        (new AdminController($config))->dashboard();
+        break;
+
+    case 'admin-categories':
+        (new AdminController($config))->categories();
+        break;
+
+    case 'admin-services':
+        (new AdminController($config))->services();
+        break;
+
+    case 'admin-employees':
+        (new AdminController($config))->employees();
+        break;
+
+    case 'admin-employee-services':
+        (new AdminController($config))->employeeServices();
+        break;
+
+    case 'admin-users':
+        (new AdminController($config))->users();
+        break;
+
+    case 'admin-reservations':
+        (new AdminController($config))->reservations();
         break;
 
     default:

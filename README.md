@@ -191,20 +191,23 @@ Główna struktura repozytorium:
 
 > OstatniWorekCementu/
 > ├── app/                # logika aplikacji (MVC)
-> │   ├── controllers/    # kontrolery (Home, Auth, PasswordReset, EmailVerification, Profile, Dashboard)
-> │   ├── models/         # modele (Database, User, PasswordReset, EmailVerification, EmailSend)
+> │   ├── controllers/    # kontrolery (Home, Auth, PasswordReset, EmailVerification, Profile, Dashboard, Admin)
+> │   ├── models/         # modele (Database, User, PasswordReset, EmailVerification, EmailSend,
+> │   │                   #         ServiceCategory, Service, Employee, EmployeeService)
 > │   ├── helpers/        # pomocniki (CSRF, autoryzacja, walidacja, adresy URL, tokeny)
-> │   └── views/          # widoki (layout, strony, errors/ — 403/404/500)
+> │   └── views/          # widoki (layout, strony, admin/, errors/ — 403/404/500)
 > ├── config/             # konfiguracja aplikacji i serwera MySQL
 > │   └── mysql/
 > ├── database/           # schemat, dane testowe i scalony zrzut
-> │   └── migrations/     # migracje dla istniejących baz (002-etap2.sql, 003-etap2.sql)
+> │   └── migrations/     # migracje dla istniejących baz (002, 003, 004)
 > ├── docker/             # obraz PHP, php.ini i konfiguracja Apache
 > │   └── php/
 > ├── docs/               # dokumentacja (diagram ERD)
 > ├── public/             # publiczny katalog serwera (front controller)
-> │   ├── css/
-> │   └── js/
+> │   ├── css/            # industrialny ciemny motyw aplikacji
+> │   ├── fonts/          # lokalny font Oswald (licencja OFL)
+> │   ├── js/
+> │   └── vendor/         # lokalny Bootstrap 5.3 (CSS + JS, bez CDN)
 > ├── .env.example        # wzór konfiguracji lokalnej
 > ├── docker-compose.yml  # stos lokalny (app + db + phpMyAdmin)
 > ├── LICENSE
@@ -295,12 +298,16 @@ jedną z dwóch ścieżek:
 
 `docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < database/migrations/003-etap2.sql`
 
+`docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < database/migrations/004-poprawka-kodowania.sql`
+
 Migracje są idempotentne: sprawdzają `information_schema` przed każdym `ALTER TABLE`
 (MySQL 8.0 nie ma `ADD COLUMN IF NOT EXISTS`), więc ponowne uruchomienie nic nie psuje.
 Migracja `002` dodaje `users.failed_attempts`, `users.locked_until` i tabelę `password_resets`;
 `003` dodaje `users.email_verified_at` oraz tabele `email_verifications` i `email_sends`,
 a istniejące konta oznacza jako potwierdzone (`email_verified_at = NOW()`), żeby nie zablokować
-dostępu po włączeniu weryfikacji e-mail.
+dostępu po włączeniu weryfikacji e-mail. `004` naprawia podwójne kodowanie polskich znaków
+w danych (`Ocieplanie budynkÃ³w` → `Ocieplanie budynków`); poprawione kolumny nie są ruszane
+przy kolejnym uruchomieniu.
 
 **(b) Dane są nieważne** — zaczynamy od zera:
 
@@ -311,8 +318,9 @@ dostępu po włączeniu weryfikacji e-mail.
 
 ## Testy
 
-Automatyczny smoke test (23 punkty: sesja, CSRF, rejestracja z linkiem, weryfikacja, XSS, IDOR,
-trzy role, blokada konta, schemat bazy, migracje, retencja) uruchamiamy przeciw działającemu stosowi:
+Automatyczny smoke test (45 punktów: sesja, CSRF, rejestracja z linkiem, weryfikacja, XSS, IDOR,
+trzy role, blokada konta, dostęp do panelu administratora, schemat bazy, migracje, kodowanie
+polskich znaków, retencja) uruchamiamy przeciw działającemu stosowi:
 
 ```bash
 bash tools/qa-smoke.sh
@@ -386,6 +394,23 @@ Podczas wdrażania aplikacji w środowisku produkcyjnym należy zadbać między 
 
 ## Funkcje dodatkowe
 
+### Etap 3 — panel administratora (wdrożone)
+
+* **Wspólny layout panelu:** sidebar z sześcioma modułami (Dashboard, Kategorie, Usługi,
+  Pracownicy, Użytkownicy, Rezerwacje), responsywna siatka (poniżej 768 px sidebar przechodzi
+  nad treść) i kontrola dostępu `requireRole('admin')` w każdej metodzie `AdminController`.
+* **CRUD kategorii usług:** dodawanie, edycja i usuwanie z potwierdzeniem; usunięcie jest
+  blokowane, gdy kategoria ma usługi (komunikat z liczbą).
+* **CRUD usług:** kategoria z listy, cena (również `0.00`), czas trwania, aktywność
+  przełączana jednym przyciskiem; usługa z rezerwacjami nie zostanie usunięta.
+* **Pracownicy:** konto `users` (rola `pracownik`) i profil `employees` powstają w jednej
+  transakcji PDO; duplikat e-maila jest odrzucany, a dezaktywacja blokuje logowanie.
+* **Relacja N:M:** przypisywanie wielu usług do pracownika (`employee_services`) z walidacją
+  ID po stronie serwera i zapisem w transakcji.
+* **Wygląd:** ciemny, industrialny motyw „beton i stal” (grafit, żółty akcent ostrzegawczy,
+  pasy hazardowe, kondensowana typografia Oswald) oparty na lokalnym Bootstrapie 5.3
+  (`public/vendor/`) i `data-bs-theme="dark"`, bez zewnętrznego CDN.
+
 ### Etap 2 — wdrożone
 
 * **Obsługa błędów bez ujawniania danych technicznych:** `display_errors` wyłączone w `prod`, szczegóły
@@ -428,6 +453,17 @@ System rezerwacji usług budowlanych – projekt semestralny 5IT.
 ## Status projektu
 
 Projekt jest rozwijany w ramach prac nad systemem rezerwacji usług budowlanych.
+
+### Etap 3 — panel administratora
+
+| # | Zadanie | Status |
+|---|---------|--------|
+| 1 | Layout panelu, routing i kontrola dostępu | ukończone |
+| 2 | CRUD kategorii usług | ukończone |
+| 3 | CRUD usług (kategoria, cena, czas, aktywność) | ukończone |
+| 4 | Zarządzanie pracownikami i zakładanie kont | ukończone |
+| 5 | Przypisywanie wielu usług pracownikowi (N:M) | ukończone |
+| 6 | Ciemny motyw oparty na Bootstrapie 5.3 | ukończone |
 
 ### Etap 2 — zadania
 
