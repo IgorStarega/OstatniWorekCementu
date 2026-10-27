@@ -440,6 +440,25 @@ else
     fail "24c. Rezerwacje: zmiana statusu -> 302" "kod=$code"
 fi
 
+# --- 25. Dashboard: kafelki z realnymi danymi ---------------------------
+JAR_DASH="$TMP/dash.txt"
+CSRF=$(get_csrf "$BASE_URL/?page=login" "$JAR_DASH")
+req POST "$BASE_URL/?page=login" -b "$JAR_DASH" -c "$JAR_DASH" >/dev/null \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "email=admin@ostatniworekcementu.pl" \
+    --data-urlencode "password=Haslo123!"
+
+code=$(req GET "$BASE_URL/?page=admin-dashboard" -b "$JAR_DASH" -c "$JAR_DASH")
+if [ "$code" = "200" ] \
+   && grep -q 'Klienci' "$TMP/body" \
+   && grep -q 'Na dziś' "$TMP/body" \
+   && ! grep -q 'w budowie' "$TMP/body" \
+   && ! grep -qE 'Fatal error|Warning|Notice|Uncaught' "$TMP/body"; then
+    pass "25. dashboard renders counters, no placeholder"
+else
+    fail "25. dashboard renders counters, no placeholder" "kod=$code"
+fi
+
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------
 skip "Widok 500 przy błędnym DB_PASS" "wymaga restartu kontenera z innym DB_PASS (environment w compose); nie testujemy w tym przebiegu"
 skip "Wizualna ocena formularzy / responsywność / czytelność błędów" "wymaga przeglądarki — patrz tools/qa-manual.md"
