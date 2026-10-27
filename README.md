@@ -202,6 +202,7 @@ Główna struktura repozytorium:
 > │   └── migrations/     # migracje dla istniejących baz (002, 003, 004)
 > ├── docker/             # obraz PHP, php.ini i konfiguracja Apache
 > │   └── php/
+> ├── deploy/             # deploy produkcyjny z obrazu GHCR (compose + instrukcja)
 > ├── docs/               # dokumentacja (diagram ERD)
 > ├── public/             # publiczny katalog serwera (front controller)
 > │   ├── css/            # industrialny ciemny motyw aplikacji
@@ -227,6 +228,10 @@ zawiera numerowane migracje dla baz, które już istnieją (zob. „Aktualizacja
 
 ### `docker/`
 Pliki potrzebne do zbudowania obrazu aplikacji (Dockerfile oraz VirtualHost Apache).
+
+### `deploy/`
+Gotowy stos produkcyjny uruchamiany z obrazu GHCR (bez montowania kodu).
+Zawiera `docker-compose.yml`, `.env.example` i `README.md` z instrukcją wdrożenia.
 
 ### `docs/`
 Dokumentacja techniczna oraz materiały związane z projektem, m.in. diagram ERD.
@@ -289,36 +294,31 @@ Przy pierwszym starcie kontener `owc-db` importuje `database/database.sql`
 ## Obraz Docker (GHCR)
 
 Obraz z kodem aplikacji (`app/`, `config/`, `public/`) buduje i publikuje workflow
-`.github/workflows/docker.yml`:
+`.github/workflows/docker.yml` w trzech krokach: **build → test → publish**.
 
-* push/merge do `main` — tagi `latest`, `main` oraz `sha-<skrót commita>`,
-* tag `vX.Y.Z` — dodatkowo tagi `X.Y.Z` i `X.Y`,
-* pull request do `main` — tylko budowa obrazu (bez publikacji), żeby wcześnie wykryć
-  błąd w Dockerfile.
+* `build` — walidacja składni PHP (`php -l`) i budowa obrazu; na push powstaje
+  tylko tymczasowy tag `sha-<sha commita>`,
+* `test` — obraz jest uruchamiany z MySQL, importowany jest `database/database.sql`
+  i wykonywany jest smoke test HTTP,
+* `publish` — dopiero po teście trafiają do GHCR tagi: `latest`, `main` i
+  `sha-<skrót>` (dla `main`) oraz `X.Y.Z` i `X.Y` (dla taga `vX.Y.Z`).
+
+Pull requesty do `main` tylko lintują i budują obraz — bez push i bez publikacji.
 
 Adres obrazu: `ghcr.io/igorstarega/ostatniworekcementu:latest`.
 
 Obraz jest samodzielny — zawiera kod aplikacji, więc wdrożenie nie potrzebuje
-montowania repozytorium. Wystarczy obraz i zmienne środowiskowe (jak w sekcji
-„Konfiguracja”), np.:
+montowania repozytorium. **Gotowy plik deployu: `deploy/docker-compose.yml`
+(instrukcja w `deploy/README.md`).**
 
-```yaml
-services:
-  app:
-    image: ghcr.io/igorstarega/ostatniworekcementu:latest
-    restart: unless-stopped
-    ports:
-      - "${BIND_ADDR:-127.0.0.1}:8082:80"
-    environment:
-      APP_ENV: prod
-      APP_URL: https://owc.dziadu.dev
-      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
-      DB_HOST: db
-      DB_PORT: "3306"
-      DB_NAME: ${MYSQL_DATABASE}
-      DB_USER: ${MYSQL_USER}
-      DB_PASS: ${MYSQL_PASSWORD}
-```
+> **Obraz nie zawiera `database/`.** `.dockerignore` celowo wyklucza ten katalog,
+> więc deploy **musi** dostarczyć `database.sql` osobno
+> (`cp ../database/database.sql ./database.sql` w katalogu `deploy/`) albo
+> zastosować migracje dla istniejącej bazy. Brak pliku kończy się utworzeniem
+> katalogu o tej nazwie i błędem `Can't initialize batch_readline`.
+
+`latest` publikuje się **po** smoke teście obrazu z MySQL, więc nie zawiera
+nieprzetestowanego kodu.
 
 Lokalny `docker-compose.yml` nadal montuje repozytorium w `/var/www/html`, więc
 rozwój działa bez przebudowy obrazu po każdej zmianie pliku.
