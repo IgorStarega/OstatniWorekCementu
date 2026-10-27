@@ -485,8 +485,60 @@ class AdminController
     {
         requireRole('admin');
 
+        $model = new Reservation($this->database());
+        $employeesModel = new Employee($this->database());
+        $errors = [];
+        $filters = $this->reservationFilters();
+
+        // Filtry odtwarzamy po zmianie statusu, żeby redirect wracał na tę samą listę.
+        $preservedFilters = [];
+        foreach (['date_from', 'date_to', 'status', 'employee_id'] as $key) {
+            if (isset($filters[$key])) {
+                $preservedFilters[$key] = $filters[$key];
+            }
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            csrf_verify(postString('csrf_token'));
+
+            if (postString('action') !== 'status') {
+                $errors[] = 'Nieznana akcja formularza.';
+            } else {
+                $id = $this->postId('id');
+                $newStatus = postString('status');
+
+                if ($id < 1 || $model->find($id) === null) {
+                    $this->flash('alert', 'Nie znaleziono rezerwacji.');
+                } elseif (!$model->updateStatus($id, $newStatus)) {
+                    $this->flash('alert', 'Nieprawidłowy status.');
+                } else {
+                    $this->flash('status', 'Status rezerwacji został zmieniony.');
+                }
+
+                $this->redirect('admin-reservations', $preservedFilters);
+            }
+        }
+
+        $reservation = null;
+        $id = $this->getInt('id');
+
+        if ($id > 0) {
+            $reservation = $model->find($id);
+
+            if ($reservation === null) {
+                $this->flash('alert', 'Nie znaleziono rezerwacji.');
+                $this->redirect('admin-reservations', $preservedFilters);
+            }
+        }
+
         $this->render('reservations', 'Rezerwacje', [
-            'flash' => $this->takeFlash(),
+            'reservations' => $reservation === null ? $model->list($filters) : [],
+            'reservation'  => $reservation,
+            'filters'      => $filters,
+            'employees'    => $employeesModel->all(),
+            'statuses'     => Reservation::STATUSES,
+            'errors'       => $errors,
+            'flash'        => $this->takeFlash(),
         ]);
     }
 
@@ -538,9 +590,15 @@ class AdminController
         return $flash;
     }
 
-    private function redirect(string $target): void
+    private function redirect(string $target, array $query = []): void
     {
-        header('Location: /?page=' . $target);
+        $url = '/?page=' . $target;
+
+        if ($query !== []) {
+            $url .= '&' . http_build_query($query);
+        }
+
+        header('Location: ' . $url);
         exit;
     }
 
@@ -558,5 +616,43 @@ class AdminController
         $value = $_GET[$key] ?? null;
 
         return is_string($value) && ctype_digit($value) ? (int) $value : 0;
+    }
+
+    // Tekst z GET — tablice i inne typy traktujemy jak brak wartości.
+    private function getString(string $key): string
+    {
+        return is_string($_GET[$key] ?? null) ? $_GET[$key] : '';
+    }
+
+    // Filtry listy rezerwacji: każda wartość jest sprawdzana przed użyciem w modelu.
+    private function reservationFilters(): array
+    {
+        $isPost = $_SERVER['REQUEST_METHOD'] === 'POST';
+        $filters = [];
+
+        foreach (['date_from', 'date_to'] as $key) {
+            $value = $isPost ? postString($key) : $this->getString($key);
+
+            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $value, $parts) === 1
+                && checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1])) {
+                $filters[$key] = $value;
+            }
+        }
+
+        // W POST filtrem jest status_filter; pole status należy do zmiany statusu.
+        $status = $isPost ? postString('status_filter') : $this->getString('status');
+        if (in_array($status, Reservation::STATUSES, true)) {
+            $filters['status'] = $status;
+        }
+
+        $rawEmployeeId = $_GET['employee_id'] ?? $_POST['employee_id'] ?? 0;
+        $employeeId = is_string($rawEmployeeId) || is_int($rawEmployeeId)
+            ? filter_var($rawEmployeeId, FILTER_VALIDATE_INT)
+            : false;
+        if ($employeeId !== false && $employeeId > 0) {
+            $filters['employee_id'] = $employeeId;
+        }
+
+        return $filters;
     }
 }
