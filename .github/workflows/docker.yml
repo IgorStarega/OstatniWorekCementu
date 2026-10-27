@@ -1,8 +1,15 @@
 name: Obraz Docker (GHCR)
 
-# Buduje obraz z kodem aplikacji (docker/php/Dockerfile) i publikuje go w
-# GitHub Container Registry. Push do main daje tagi: latest, main, sha-<skrót>.
-# Tag vX.Y.Z dodaje tagi X.Y.Z oraz X.Y. PR-y tylko budują obraz (bez push).
+# Przepływ: build (lint PHP + budowa) -> test (MySQL + smoke HTTP) -> publish.
+# Publikacja trafia do GHCR dopiero po przejściu testu, więc latest nigdy nie
+# zawiera nieprzetestowanego kodu. PR-y tylko budują obraz (bez push i bez
+# publikacji), a build wypycha wyłącznie tag sha-<pełny SHA>, po którym test
+# pobiera dokładnie ten obraz.
+#
+# Tagi po publikacji:
+#   main      -> latest, main, sha-<skrót>
+#   vX.Y.Z    -> X.Y.Z, X.Y, sha-<skrót>
+#   PR        -> brak publikacji
 
 on:
   push:
@@ -12,16 +19,165 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Na main nie przerywamy publikacji — przerwany push do GHCR może zostawić
+# niespójny manifest. Anulujemy tylko PR-y i tagi.
 concurrency:
   group: docker-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
-env:
-  IMAGE_NAME: ghcr.io/${{ github.repository }}
+permissions:
+  contents: read
 
 jobs:
   build:
-    name: Budowa i publikacja
+    name: Budowa i lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.name }}
+
+    steps:
+      - name: Pobranie repozytorium
+        uses: actions/checkout@v4
+
+      - name: Konfiguracja PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: Walidacja składni PHP
+        run: |
+          set -e
+          find app config public -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Nazwa obrazu (GHCR wymaga małych liter)
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Konfiguracja Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Logowanie do GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Budowa obrazu testowego (sha)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/php/Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.image.outputs.name }}:sha-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Podsumowanie budowy
+        run: |
+          {
+            echo "### Budowa obrazu"
+            echo ""
+            echo "Tag testowy: \`${{ steps.image.outputs.name }}:sha-${{ github.sha }}\`"
+            echo "Publikacja: ${{ github.event_name != 'pull_request' }} (tylko po teście)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    name: Test obrazu
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+
+    services:
+      db:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root123
+          MYSQL_DATABASE: budowlanka_rezerwacje
+          MYSQL_USER: app
+          MYSQL_PASSWORD: app123
+        ports:
+          - "3306:3306"
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot123"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=30
+
+    steps:
+      - name: Pobranie repozytorium
+        uses: actions/checkout@v4
+
+      - name: Logowanie do GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sprawdź, że database.sql to plik
+        run: |
+          if [ ! -f database/database.sql ]; then
+            echo "database/database.sql nie istnieje albo jest katalogiem"
+            ls -la database/
+            exit 1
+          fi
+
+      - name: Import schematu
+        run: |
+          mysql -h127.0.0.1 -uroot -proot123 budowlanka_rezerwacje < database/database.sql
+
+      - name: Uruchom obraz
+        run: |
+          docker run -d --name owc-test -p 8082:80 \
+            -e APP_ENV=local \
+            -e APP_URL=http://localhost:8082 \
+            -e DB_HOST=host.docker.internal \
+            -e DB_PORT=3306 \
+            -e DB_NAME=budowlanka_rezerwacje \
+            -e DB_USER=app \
+            -e DB_PASS=app123 \
+            --add-host=host.docker.internal:host-gateway \
+            ${{ needs.build.outputs.image }}:sha-${{ github.sha }}
+          sleep 8
+
+      - name: Smoke test HTTP
+        run: |
+          set -e
+          code=$(curl -s -o /tmp/body -w '%{http_code}' http://localhost:8082/?page=home)
+          echo "HTTP $code"
+          if grep -qE 'Fatal error|Warning|Uncaught|SQLSTATE' /tmp/body; then
+            echo "--- Treść odpowiedzi ---"
+            cat /tmp/body
+            exit 1
+          fi
+          if [ "$code" != "200" ]; then
+            echo "--- Treść odpowiedzi ---"
+            cat /tmp/body
+            exit 1
+          fi
+
+      - name: Logi kontenera przy błędzie
+        if: failure()
+        run: docker logs owc-test || true
+
+      - name: Sprzątanie kontenera
+        if: always()
+        run: docker rm -f owc-test || true
+
+  publish:
+    name: Publikacja
+    needs: [build, test]
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -35,7 +191,6 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Logowanie do GHCR
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -46,33 +201,30 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_NAME }}
+          images: ${{ needs.build.outputs.image }}
           tags: |
             type=ref,event=branch
-            type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Budowa i publikacja
+      - name: Publikacja po teście
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/php/Dockerfile
           platforms: linux/amd64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Podsumowanie
+      - name: Podsumowanie publikacji
         run: |
           {
-            echo "### Obraz Docker"
-            echo ""
-            echo "Tagowanie i publikacja: ${{ github.event_name != 'pull_request' }}"
+            echo "### Publikacja obrazu"
             echo ""
             echo '```'
             echo "${{ steps.meta.outputs.tags }}"
