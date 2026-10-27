@@ -286,6 +286,49 @@ Przy pierwszym starcie kontener `owc-db` importuje `database/database.sql`
 
 ---
 
+## Obraz Docker (GHCR)
+
+Obraz z kodem aplikacji (`app/`, `config/`, `public/`) buduje i publikuje workflow
+`.github/workflows/docker.yml`:
+
+* push/merge do `main` — tagi `latest`, `main` oraz `sha-<skrót commita>`,
+* tag `vX.Y.Z` — dodatkowo tagi `X.Y.Z` i `X.Y`,
+* pull request do `main` — tylko budowa obrazu (bez publikacji), żeby wcześnie wykryć
+  błąd w Dockerfile.
+
+Adres obrazu: `ghcr.io/igorstarega/ostatniworekcementu:latest`.
+
+Obraz jest samodzielny — zawiera kod aplikacji, więc wdrożenie nie potrzebuje
+montowania repozytorium. Wystarczy obraz i zmienne środowiskowe (jak w sekcji
+„Konfiguracja”), np.:
+
+```yaml
+services:
+  app:
+    image: ghcr.io/igorstarega/ostatniworekcementu:latest
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:8082:80"
+    environment:
+      APP_ENV: prod
+      APP_URL: https://owc.dziadu.dev
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_USER: ${MYSQL_USER}
+      DB_PASS: ${MYSQL_PASSWORD}
+```
+
+Lokalny `docker-compose.yml` nadal montuje repozytorium w `/var/www/html`, więc
+rozwój działa bez przebudowy obrazu po każdej zmianie pliku.
+
+> **Widoczność pakietu.** Nowy pakiet w GHCR jest domyślnie prywatny. Jeśli obraz
+> ma być pobierany bez logowania, ustaw jego widoczność na publiczną w
+> *GitHub → Packages → OstatniWorekCementu → Package settings*.
+
+---
+
 ## Aktualizacja istniejącej bazy
 
 Skrypt `database/database.sql` jest importowany tylko przy **pustym** katalogu danych
