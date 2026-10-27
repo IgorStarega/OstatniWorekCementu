@@ -402,6 +402,44 @@ else
     fail "22. gość nie widzi linku do panelu" "link widoczny"
 fi
 
+# --- 24. Rezerwacje: lista i filtry ------------------------------------
+JAR_RES="$TMP/res.txt"
+CSRF=$(get_csrf "$BASE_URL/?page=login" "$JAR_RES")
+req POST "$BASE_URL/?page=login" -b "$JAR_RES" -c "$JAR_RES" >/dev/null \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "email=admin@ostatniworekcementu.pl" \
+    --data-urlencode "password=Haslo123!"
+
+code=$(req GET "$BASE_URL/?page=admin-reservations" -b "$JAR_RES" -c "$JAR_RES")
+if [ "$code" = "200" ] && grep -q 'Rezerwacje' "$TMP/body" \
+   && ! grep -qE 'Fatal error|Warning|Notice|Uncaught' "$TMP/body"; then
+    pass "24. admin-reservations lista -> 200"
+else
+    fail "24. admin-reservations lista -> 200" "kod=$code"
+fi
+
+# wstrzyknięte filtry nie mogą wywalić SQL
+code=$(req GET "$BASE_URL/?page=admin-reservations&status=xss&employee_id=abc&date_from=2026-13-99" \
+    -b "$JAR_RES" -c "$JAR_RES")
+if [ "$code" = "200" ] && ! grep -qE 'Fatal error|SQLSTATE|Uncaught' "$TMP/body"; then
+    pass "24b. Rezerwacje: wstrzyknięte filtry zignorowane"
+else
+    fail "24b. Rezerwacje: wstrzyknięte filtry zignorowane" "kod=$code"
+fi
+
+# zmiana statusu istniejącej rezerwacji (id=1 z seeda)
+CSRF=$(get_csrf "$BASE_URL/?page=admin-reservations&id=1" "$JAR_RES")
+code=$(req POST "$BASE_URL/?page=admin-reservations" -b "$JAR_RES" -c "$JAR_RES" \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "action=status" \
+    --data-urlencode "id=1" \
+    --data-urlencode "status=potwierdzona")
+if [ "$code" = "302" ]; then
+    pass "24c. Rezerwacje: zmiana statusu -> 302"
+else
+    fail "24c. Rezerwacje: zmiana statusu -> 302" "kod=$code"
+fi
+
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------
 skip "Widok 500 przy błędnym DB_PASS" "wymaga restartu kontenera z innym DB_PASS (environment w compose); nie testujemy w tym przebiegu"
 skip "Wizualna ocena formularzy / responsywność / czytelność błędów" "wymaga przeglądarki — patrz tools/qa-manual.md"

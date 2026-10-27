@@ -29,6 +29,7 @@ require BASE_PATH . '/app/models/ServiceCategory.php';
 require BASE_PATH . '/app/models/Service.php';
 require BASE_PATH . '/app/models/Employee.php';
 require BASE_PATH . '/app/models/EmployeeService.php';
+require BASE_PATH . '/app/models/Reservation.php';
 require BASE_PATH . '/app/controllers/HomeController.php';
 require BASE_PATH . '/app/controllers/AuthController.php';
 require BASE_PATH . '/app/controllers/PasswordResetController.php';
