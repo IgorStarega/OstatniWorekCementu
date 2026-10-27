@@ -299,26 +299,21 @@ Obraz z kodem aplikacji (`app/`, `config/`, `public/`) buduje i publikuje workfl
 Adres obrazu: `ghcr.io/igorstarega/ostatniworekcementu:latest`.
 
 Obraz jest samodzielny — zawiera kod aplikacji, więc wdrożenie nie potrzebuje
-montowania repozytorium. Wystarczy obraz i zmienne środowiskowe (jak w sekcji
-„Konfiguracja”), np.:
+montowania repozytorium. Gotowy plik wdrożeniowy to `docker-compose.prod.yml`
+(serwis `app` używa `image:` zamiast `build:` i nie ma wolumenu z kodem;
+phpMyAdmin jest dostępny tylko z profilem `tools`):
 
-```yaml
-services:
-  app:
-    image: ghcr.io/igorstarega/ostatniworekcementu:latest
-    restart: unless-stopped
-    ports:
-      - "${BIND_ADDR:-127.0.0.1}:8082:80"
-    environment:
-      APP_ENV: prod
-      APP_URL: https://owc.dziadu.dev
-      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
-      DB_HOST: db
-      DB_PORT: "3306"
-      DB_NAME: ${MYSQL_DATABASE}
-      DB_USER: ${MYSQL_USER}
-      DB_PASS: ${MYSQL_PASSWORD}
+```bash
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+
+# phpMyAdmin, tylko gdy jest potrzebny:
+docker compose -f docker-compose.prod.yml --profile tools up -d
 ```
+
+Na serwerze w `.env` ustaw `APP_ENV=prod`, `APP_URL=https://...` oraz `MYSQL_*`;
+do rollbacku przypnij konkretny obraz przez `IMAGE_TAG=sha-<skrót>` zamiast `latest`.
+Aktualizacja to `pull` + `up -d`.
 
 Lokalny `docker-compose.yml` nadal montuje repozytorium w `/var/www/html`, więc
 rozwój działa bez przebudowy obrazu po każdej zmianie pliku.
