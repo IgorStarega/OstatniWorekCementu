@@ -25,6 +25,7 @@ vendor/
 # Duże/zbędne w obrazie: dane bazy, zrzuty SQL, docs, motyw PMA, uploady, grafiki
 data/
 database/
+deploy/
 docs/
 themes/
 tools/

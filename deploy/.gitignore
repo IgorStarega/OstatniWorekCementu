@@ -1,0 +1,5 @@
+# Sekrety i dane lokalne deployu — nie trafiają do repozytorium.
+.env
+data/
+database.sql
+config/mysql/
