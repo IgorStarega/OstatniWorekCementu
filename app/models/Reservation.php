@@ -58,6 +58,27 @@ class Reservation
         return $reservation ?: null;
     }
 
+    // Najbliższe rezerwacje na pulpit: od dziś, bez anulowanych.
+    public function upcoming(int $limit = 5): array
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT r.id, r.reservation_date, r.start_time, r.status,
+                    CONCAT(u.first_name, ' ', u.last_name) AS client_name,
+                    s.name AS service_name
+             FROM reservations r
+             JOIN users u    ON u.id = r.user_id
+             JOIN services s ON s.id = r.service_id
+             WHERE r.reservation_date >= CURDATE()
+               AND r.status != 'anulowana'
+             ORDER BY r.reservation_date ASC, r.start_time ASC
+             LIMIT :limit"
+        );
+        $statement->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $statement->execute();
+
+        return $statement->fetchAll();
+    }
+
     // Zmiana statusu z whitelistą wartości — walidacja należy do modelu,
     // bo sam kontroler nie może być jedyną barierą.
     public function updateStatus(int $id, string $status): bool

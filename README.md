@@ -407,6 +407,9 @@ Podczas wdrażania aplikacji w środowisku produkcyjnym należy zadbać między 
   transakcji PDO; duplikat e-maila jest odrzucany, a dezaktywacja blokuje logowanie.
 * **Relacja N:M:** przypisywanie wielu usług do pracownika (`employee_services`) z walidacją
   ID po stronie serwera i zapisem w transakcji.
+* **Dashboard z rzeczywistymi danymi:** pięć liczników (aktywni klienci, pracownicy, usługi,
+  wszystkie rezerwacje i rezerwacje na dziś) pobieranych jednym zapytaniem oraz lista pięciu
+  najbliższych rezerwacji bez anulowanych, z linkami do szczegółów.
 * **Wygląd:** ciemny, industrialny motyw „beton i stal” (grafit, żółty akcent ostrzegawczy,
   pasy hazardowe, kondensowana typografia Oswald) oparty na lokalnym Bootstrapie 5.3
   (`public/vendor/`) i `data-bs-theme="dark"`, bez zewnętrznego CDN.
@@ -464,6 +467,7 @@ Projekt jest rozwijany w ramach prac nad systemem rezerwacji usług budowlanych.
 | 4 | Zarządzanie pracownikami i zakładanie kont | ukończone |
 | 5 | Przypisywanie wielu usług pracownikowi (N:M) | ukończone |
 | 6 | Ciemny motyw oparty na Bootstrapie 5.3 | ukończone |
+| 7 | Dashboard z licznikami i najbliższymi rezerwacjami | ukończone |
 
 ### Etap 2 — zadania
 

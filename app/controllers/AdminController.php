@@ -13,8 +13,13 @@ class AdminController
     {
         requireRole('admin');
 
+        $stats = new Stats($this->database());
+        $reservations = new Reservation($this->database());
+
         $this->render('dashboard', 'Dashboard', [
-            'flash' => $this->takeFlash(),
+            'counters' => $stats->counters(),
+            'upcoming' => $reservations->upcoming(5),
+            'flash'    => $this->takeFlash(),
         ]);
     }
 
