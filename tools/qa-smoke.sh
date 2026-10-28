@@ -476,6 +476,30 @@ else
     fail "26. admin-availability renders week table" "kod=$code"
 fi
 
+# --- 27. Użytkownicy: lista i filtr --------------------------------------
+JAR_USR="$TMP/usr.txt"
+CSRF=$(get_csrf "$BASE_URL/?page=login" "$JAR_USR")
+req POST "$BASE_URL/?page=login" -b "$JAR_USR" -c "$JAR_USR" >/dev/null \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "email=admin@ostatniworekcementu.pl" \
+    --data-urlencode "password=Haslo123!"
+
+code=$(req GET "$BASE_URL/?page=admin-users" -b "$JAR_USR" -c "$JAR_USR")
+if [ "$code" = "200" ] && grep -q 'admin@ostatniworekcementu.pl' "$TMP/body" \
+   && ! grep -q 'w budowie' "$TMP/body"; then
+    pass "27. admin-users lista bez placeholdera"
+else
+    fail "27. admin-users lista bez placeholdera" "kod=$code"
+fi
+
+# wstrzyknięta rola nie może wywalić SQL
+code=$(req GET "$BASE_URL/?page=admin-users&role=haker&active=abc" -b "$JAR_USR" -c "$JAR_USR")
+if [ "$code" = "200" ] && ! grep -qE 'Fatal error|SQLSTATE|Uncaught' "$TMP/body"; then
+    pass "27b. admin-users: wstrzyknięte filtry zignorowane"
+else
+    fail "27b. admin-users: wstrzyknięte filtry zignorowane" "kod=$code"
+fi
+
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------
 skip "Widok 500 przy błędnym DB_PASS" "wymaga restartu kontenera z innym DB_PASS (environment w compose); nie testujemy w tym przebiegu"
 skip "Wizualna ocena formularzy / responsywność / czytelność błędów" "wymaga przeglądarki — patrz tools/qa-manual.md"

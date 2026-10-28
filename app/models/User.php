@@ -2,11 +2,71 @@
 // Operacje bazodanowe dotyczące kont użytkowników.
 class User
 {
+    // Jedyne dozwolone role — zgodne z enumem w bazie.
+    public const ROLES = ['klient', 'pracownik', 'admin'];
+
     private $pdo;
 
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
+    }
+
+    // Lista użytkowników z opcjonalnymi filtrami. Walidacja whitelisty ról w modelu.
+    public function allWithFilters(?string $role, ?int $active): array
+    {
+        $conditions = [];
+        $params = [];
+
+        if ($role !== null && in_array($role, self::ROLES, true)) {
+            $conditions[] = 'role = :role';
+            $params['role'] = $role;
+        }
+
+        if ($active !== null) {
+            $conditions[] = 'is_active = :active';
+            $params['active'] = $active === 1 ? 1 : 0;
+        }
+
+        $statement = $this->pdo->prepare(
+            'SELECT id, first_name, last_name, email, phone, role, is_active, created_at
+             FROM users'
+            . ($conditions === [] ? '' : ' WHERE ' . implode(' AND ', $conditions))
+            . ' ORDER BY created_at DESC'
+        );
+        $statement->execute($params);
+
+        return $statement->fetchAll();
+    }
+
+    // Zmiana roli — whitelist ['klient','pracownik','admin'] W MODELU.
+    // Zwraca false, gdy rola spoza listy.
+    public function updateRole(int $id, string $role): bool
+    {
+        if (!in_array($role, self::ROLES, true)) {
+            return false;
+        }
+
+        $statement = $this->pdo->prepare(
+            'UPDATE users SET role = :role WHERE id = :id'
+        );
+        $statement->execute([
+            'role' => $role,
+            'id'   => $id,
+        ]);
+
+        return true;
+    }
+
+    public function setActive(int $id, bool $active): void
+    {
+        $statement = $this->pdo->prepare(
+            'UPDATE users SET is_active = :is_active WHERE id = :id'
+        );
+        $statement->execute([
+            'is_active' => $active ? 1 : 0,
+            'id'        => $id,
+        ]);
     }
 
     public function findByEmail(string $email): ?array

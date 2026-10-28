@@ -580,8 +580,77 @@ class AdminController
     {
         requireRole('admin');
 
+        $usersModel = new User($this->database());
+
+        $role = $this->getString('role');
+        if (!in_array($role, User::ROLES, true)) {
+            $role = null;
+        }
+
+        $activeRaw = $this->getString('active');
+        $active = $activeRaw === '0' ? 0 : ($activeRaw === '1' ? 1 : null);
+
+        $preservedFilters = [];
+        if ($role !== null) {
+            $preservedFilters['role'] = $role;
+        }
+        if ($active !== null) {
+            $preservedFilters['active'] = $active;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            csrf_verify(postString('csrf_token'));
+            $action = postString('action');
+            $id = $this->postId('id');
+
+            // Ochrona własnego konta: administrator nie może odebrać sobie uprawnień
+            // ani zablokować się przed dalszą pracą w panelu.
+            if ($id > 0 && $id === currentUserId()) {
+                $this->flash('alert', 'Nie możesz zmienić roli ani zablokować własnego konta.');
+                $this->redirect('admin-users', $preservedFilters);
+            }
+
+            $target = $id > 0 ? $usersModel->findById($id) : null;
+            if ($target === null) {
+                $this->flash('alert', 'Nie znaleziono użytkownika.');
+                $this->redirect('admin-users', $preservedFilters);
+            }
+
+            if ($action === 'role') {
+                $newRole = postString('role');
+
+                if (!in_array($newRole, User::ROLES, true)) {
+                    $this->flash('alert', 'Nieprawidłowa rola użytkownika.');
+                } elseif ($usersModel->updateRole($id, $newRole)) {
+                    $this->flash('status', 'Rola użytkownika została zmieniona.');
+                } else {
+                    $this->flash('alert', 'Nie udało się zmienić roli użytkownika.');
+                }
+
+                $this->redirect('admin-users', $preservedFilters);
+            }
+
+            if ($action === 'toggle') {
+                $isActive = (int) $target['is_active'] === 1;
+                $usersModel->setActive($id, !$isActive);
+                $this->flash(
+                    'status',
+                    $isActive ? 'Konto użytkownika zostało zablokowane.' : 'Konto użytkownika zostało odblokowane.'
+                );
+
+                $this->redirect('admin-users', $preservedFilters);
+            }
+
+            $this->flash('alert', 'Nieznana akcja formularza.');
+            $this->redirect('admin-users', $preservedFilters);
+        }
+
         $this->render('users', 'Użytkownicy', [
-            'flash' => $this->takeFlash(),
+            'users'        => $usersModel->allWithFilters($role, $active),
+            'roleFilter'   => $role,
+            'activeFilter' => $active,
+            'errors'       => [],
+            'flash'        => $this->takeFlash(),
         ]);
     }
 
