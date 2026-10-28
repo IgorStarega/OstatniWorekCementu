@@ -22,6 +22,11 @@ $adminModules = [
         'icon'  => '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 5a3 3 0 0 1 0 6"/><path d="M17 14a6 6 0 0 1 4 6"/>',
     ],
     [
+        'page'  => 'admin-availability',
+        'label' => 'Dostępność',
+        'icon'  => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    ],
+    [
         'page'  => 'admin-users',
         'label' => 'Użytkownicy',
         'icon'  => '<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>',

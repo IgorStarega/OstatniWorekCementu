@@ -344,7 +344,8 @@ req POST "$BASE_URL/?page=login" -b "$JAR_ADMIN" -c "$JAR_ADMIN" >/dev/null \
     --data-urlencode "email=admin@ostatniworekcementu.pl" --data-urlencode "password=Haslo123!"
 
 for admin_page in admin-dashboard admin-categories admin-services \
-                  admin-employees admin-users admin-reservations; do
+                  admin-employees admin-employee-services admin-availability \
+                  admin-users admin-reservations; do
     # Gość: 302 na logowanie.
     code=$(req GET "$BASE_URL/?page=$admin_page")
     if [ "$code" = "302" ] && grep -qi 'location:.*page=login' "$TMP/hdr"; then
@@ -457,6 +458,22 @@ if [ "$code" = "200" ] \
     pass "25. dashboard renders counters, no placeholder"
 else
     fail "25. dashboard renders counters, no placeholder" "kod=$code"
+fi
+
+# --- 26. Dostępność pracownika: render tygodnia --------------------------
+JAR_AVAIL="$TMP/avail.txt"
+CSRF=$(get_csrf "$BASE_URL/?page=login" "$JAR_AVAIL")
+req POST "$BASE_URL/?page=login" -b "$JAR_AVAIL" -c "$JAR_AVAIL" >/dev/null \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "email=admin@ostatniworekcementu.pl" \
+    --data-urlencode "password=Haslo123!"
+
+code=$(req GET "$BASE_URL/?page=admin-availability&employee_id=1" -b "$JAR_AVAIL" -c "$JAR_AVAIL")
+if [ "$code" = "200" ] && grep -q 'Poniedziałek' "$TMP/body" \
+   && ! grep -qE 'Fatal error|Warning|Notice|Uncaught' "$TMP/body"; then
+    pass "26. admin-availability renders week table"
+else
+    fail "26. admin-availability renders week table" "kod=$code"
 fi
 
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------
