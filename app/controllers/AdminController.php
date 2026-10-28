@@ -475,7 +475,106 @@ class AdminController
         ]);
     }
 
-    // --- Moduły w budowie --------------------------------------------------
+    // --- Dostępność pracowników --------------------------------------------
+
+    public function availability(): void
+    {
+        requireRole('admin');
+
+        $employeesModel = new Employee($this->database());
+        $availabilityModel = new EmployeeAvailability($this->database());
+        $employees = $employeesModel->all();
+        $errors = [];
+        $formDay = 0;
+        $formStart = '';
+        $formEnd = '';
+
+        $selectedEmployeeId = $_SERVER['REQUEST_METHOD'] === 'POST'
+            ? $this->postId('employee_id')
+            : $this->getInt('employee_id');
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            csrf_verify(postString('csrf_token'));
+            $action = postString('action');
+
+            $employee = $selectedEmployeeId > 0 ? $employeesModel->find($selectedEmployeeId) : null;
+            if ($employee === null) {
+                $errors[] = 'Wybierz istniejącego pracownika.';
+            }
+
+            if ($action === 'upsert') {
+                $formDay = $this->postId('day_of_week');
+                $formStart = trim(postString('start_time'));
+                $formEnd = trim(postString('end_time'));
+
+                if ($formDay < 1 || $formDay > 7) {
+                    $errors[] = 'Wybierz dzień tygodnia od 1 (poniedziałek) do 7 (niedziela).';
+                }
+
+                $startTime = $this->normalizeTime($formStart);
+                $endTime = $this->normalizeTime($formEnd);
+
+                if ($startTime === null || $endTime === null) {
+                    $errors[] = 'Podaj poprawne godziny w formacie HH:MM lub HH:MM:SS.';
+                } elseif ($startTime >= $endTime) {
+                    $errors[] = 'Godzina rozpoczęcia musi być wcześniejsza niż godzina zakończenia.';
+                }
+
+                if ($errors === []) {
+                    try {
+                        $availabilityModel->upsert($selectedEmployeeId, $formDay, $startTime, $endTime);
+                        $this->flash('status', 'Dostępność pracownika została zapisana.');
+                        $this->redirect('admin-availability', ['employee_id' => $selectedEmployeeId]);
+                    } catch (Throwable $exception) {
+                        error_log('Błąd zapisu dostępności: ' . $exception->getMessage());
+                        $errors[] = 'Nie udało się zapisać dostępności. Spróbuj ponownie.';
+                    }
+                }
+            } elseif ($action === 'delete') {
+                $formDay = $this->postId('day_of_week');
+
+                if ($formDay < 1 || $formDay > 7) {
+                    $errors[] = 'Wybierz dzień tygodnia od 1 (poniedziałek) do 7 (niedziela).';
+                }
+
+                if ($errors === []) {
+                    try {
+                        $availabilityModel->delete($selectedEmployeeId, $formDay);
+                        $this->flash('status', 'Okno dostępności zostało usunięte.');
+                        $this->redirect('admin-availability', ['employee_id' => $selectedEmployeeId]);
+                    } catch (Throwable $exception) {
+                        error_log('Błąd usuwania dostępności: ' . $exception->getMessage());
+                        $errors[] = 'Nie udało się usunąć dostępności. Spróbuj ponownie.';
+                    }
+                }
+            } else {
+                $errors[] = 'Nieznana akcja formularza.';
+            }
+        } else {
+            if ($selectedEmployeeId < 1 && $employees !== []) {
+                $selectedEmployeeId = (int) $employees[0]['id'];
+            }
+        }
+
+        $selectedEmployee = $selectedEmployeeId > 0 ? $employeesModel->find($selectedEmployeeId) : null;
+        $availability = $selectedEmployee !== null
+            ? $availabilityModel->forEmployee($selectedEmployeeId)
+            : [];
+
+        $this->render('availability', 'Dostępność', [
+            'employees'          => $employees,
+            'errors'             => $errors,
+            'flash'              => $this->takeFlash(),
+            'selectedEmployeeId' => $selectedEmployeeId,
+            'selectedEmployee'   => $selectedEmployee,
+            'availability'       => $availability,
+            'formDay'            => $formDay,
+            'formStart'          => $formStart,
+            'formEnd'            => $formEnd,
+        ]);
+    }
+
+    // --- Użytkownicy -------------------------------------------------------
 
     public function users(): void
     {
@@ -627,6 +726,29 @@ class AdminController
     private function getString(string $key): string
     {
         return is_string($_GET[$key] ?? null) ? $_GET[$key] : '';
+    }
+
+    // Normalizuje HH:MM lub HH:MM:SS do HH:MM:SS; null dla niepoprawnej godziny.
+    private function normalizeTime(string $value): ?string
+    {
+        if (preg_match('/^\d{2}:\d{2}$/', $value) === 1) {
+            $format = 'H:i';
+        } elseif (preg_match('/^\d{2}:\d{2}:\d{2}$/', $value) === 1) {
+            $format = 'H:i:s';
+        } else {
+            return null;
+        }
+
+        $time = DateTime::createFromFormat('!' . $format, $value);
+        $parseErrors = DateTime::getLastErrors();
+
+        if ($time === false
+            || ($parseErrors !== false
+                && ($parseErrors['warning_count'] > 0 || $parseErrors['error_count'] > 0))) {
+            return null;
+        }
+
+        return $time->format('H:i:s');
     }
 
     // Filtry listy rezerwacji: każda wartość jest sprawdzana przed użyciem w modelu.
