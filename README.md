@@ -8,12 +8,14 @@ System internetowy do obsługi firmy budowlanej oraz rezerwacji usług budowlany
 * [Główne funkcjonalności](#główne-funkcjonalności)
 * [Technologie](#technologie)
 * [Baza danych](#baza-danych)
+* [Dostępność pracowników](#dostępność-pracowników)
 * [Role użytkowników](#role-użytkowników)
 * [Dane testowe (Logowanie)](#dane-testowe-logowanie)
 * [Zakres projektu](#zakres-projektu)
 * [Struktura projektu](#struktura-projektu)
 * [Wymagania](#wymagania)
 * [Uruchomienie](#uruchomienie)
+* [Deploy bez lokalnego repozytorium](#deploy-bez-lokalnego-repozytorium)
 * [Testy](#testy)
 * [Konfiguracja](#konfiguracja)
 * [Bezpieczeństwo](#bezpieczeństwo)
@@ -108,6 +110,18 @@ Pliki związane z bazą danych znajdują się w katalogu: `database/`
 
 ---
 
+## Dostępność pracowników
+
+Tabela `employee_availability` przechowuje tygodniowe okna pracy pracownika.
+
+**Konwencja `day_of_week`:** 1 = poniedziałek, 7 = niedziela.
+
+Jeden wiersz na pracownika i dzień (`UNIQUE uq_employee_day`), `start_time` musi być
+ostro mniejsze niż `end_time`. Etap 4 (proces rezerwacji) wyznacza wolne terminy
+na podstawie tych okien i `services.duration_minutes`.
+
+---
+
 ## Role użytkowników
 
 System został zaprojektowany z podziałem na role.
@@ -193,8 +207,9 @@ Główna struktura repozytorium:
 > ├── app/                # logika aplikacji (MVC)
 > │   ├── controllers/    # kontrolery (Home, Auth, PasswordReset, EmailVerification, Profile, Dashboard, Admin)
 > │   ├── models/         # modele (Database, User, PasswordReset, EmailVerification, EmailSend,
-> │   │                   #         ServiceCategory, Service, Employee, EmployeeService)
-> │   ├── helpers/        # pomocniki (CSRF, autoryzacja, walidacja, adresy URL, tokeny)
+> │   │                   #         ServiceCategory, Service, Employee, EmployeeService,
+> │   │                   #         EmployeeAvailability, Reservation, Stats)
+> │   ├── helpers/        # pomocniki (CSRF, autoryzacja, walidacja, paginacja, adresy URL, tokeny)
 > │   └── views/          # widoki (layout, strony, admin/, errors/ — 403/404/500)
 > ├── config/             # konfiguracja aplikacji i serwera MySQL
 > │   └── mysql/
@@ -329,6 +344,27 @@ rozwój działa bez przebudowy obrazu po każdej zmianie pliku.
 
 ---
 
+## Deploy bez lokalnego repozytorium
+
+Gdy katalog deployu jest na innej maszynie niż repo:
+
+```bash
+curl -fsSL -o docker-compose.yml \
+  https://raw.githubusercontent.com/IgorStarega/OstatniWorekCementu/main/deploy/docker-compose.yml
+curl -fsSL -o database.sql \
+  https://raw.githubusercontent.com/IgorStarega/OstatniWorekCementu/main/database/database.sql
+
+test -f database.sql && echo "OK: plik" || echo "BŁĄD"
+grep 'database.sql' docker-compose.yml   # musi być ./database.sql
+```
+
+**Nie kopiuj `docker-compose.yml` z pamięci ani ze starych commitów.** Wersja z PR #20
+montowała `./database/database.sql` (podkatalog), co powodowało utworzenie katalogu
+zamiast pliku i błąd `Can't initialize batch_readline`. Aktualna wersja montuje
+`./database.sql` z katalogu głównego.
+
+---
+
 ## Aktualizacja istniejącej bazy
 
 Skrypt `database/database.sql` jest importowany tylko przy **pustym** katalogu danych
@@ -361,9 +397,10 @@ przy kolejnym uruchomieniu.
 
 ## Testy
 
-Automatyczny smoke test (45 punktów: sesja, CSRF, rejestracja z linkiem, weryfikacja, XSS, IDOR,
-trzy role, blokada konta, dostęp do panelu administratora, schemat bazy, migracje, kodowanie
-polskich znaków, retencja) uruchamiamy przeciw działającemu stosowi:
+Automatyczny smoke test (36 sekcji: sesja, CSRF, rejestracja z linkiem, weryfikacja, XSS, IDOR,
+trzy role, blokada konta, dostęp do panelu administratora, operacje destrukcyjne, paginacja
+i wyszukiwanie, schemat bazy, migracje, kodowanie polskich znaków, retencja) uruchamiamy
+przeciw działającemu stosowi:
 
 ```bash
 bash tools/qa-smoke.sh
@@ -439,9 +476,13 @@ Podczas wdrażania aplikacji w środowisku produkcyjnym należy zadbać między 
 
 ### Etap 3 — panel administratora (wdrożone)
 
-* **Wspólny layout panelu:** sidebar z sześcioma modułami (Dashboard, Kategorie, Usługi,
-  Pracownicy, Użytkownicy, Rezerwacje), responsywna siatka (poniżej 768 px sidebar przechodzi
-  nad treść) i kontrola dostępu `requireRole('admin')` w każdej metodzie `AdminController`.
+* **Wspólny layout panelu:** sidebar z ośmioma modułami (Dashboard, Kategorie, Usługi,
+  Pracownicy, Przypisania usług, Dostępność, Użytkownicy, Rezerwacje), responsywna siatka
+  (poniżej 768 px sidebar przechodzi nad treść) i kontrola dostępu `requireRole('admin')`
+  w każdej metodzie `AdminController`.
+* **Dashboard z rzeczywistymi danymi:** liczniki klientów, pracowników, usług, wszystkich
+  rezerwacji i rezerwacji na dziś oraz lista pięciu najbliższych rezerwacji bez anulowanych,
+  z linkami do szczegółów.
 * **CRUD kategorii usług:** dodawanie, edycja i usuwanie z potwierdzeniem; usunięcie jest
   blokowane, gdy kategoria ma usługi (komunikat z liczbą).
 * **CRUD usług:** kategoria z listy, cena (również `0.00`), czas trwania, aktywność
@@ -450,9 +491,16 @@ Podczas wdrażania aplikacji w środowisku produkcyjnym należy zadbać między 
   transakcji PDO; duplikat e-maila jest odrzucany, a dezaktywacja blokuje logowanie.
 * **Relacja N:M:** przypisywanie wielu usług do pracownika (`employee_services`) z walidacją
   ID po stronie serwera i zapisem w transakcji.
-* **Dashboard z rzeczywistymi danymi:** pięć liczników (aktywni klienci, pracownicy, usługi,
-  wszystkie rezerwacje i rezerwacje na dziś) pobieranych jednym zapytaniem oraz lista pięciu
-  najbliższych rezerwacji bez anulowanych, z linkami do szczegółów.
+* **Dostępność pracownika:** tygodniowe okna pracy w tabeli `employee_availability`;
+  konwencja `day_of_week`: 1 = poniedziałek, 7 = niedziela.
+* **Rezerwacje:** filtry (data od–do, status, pracownik), wyszukiwanie po kliencie lub nazwie
+  usługi, zmiana statusu przez POST; anulowanie rezerwacji to zmiana statusu, nie osobny link.
+* **Użytkownicy:** filtry roli i aktywności, wyszukiwanie po imieniu, nazwisku i e-mailu oraz
+  ochrona własnego konta przed odebraniem uprawnień lub zablokowaniem.
+* **Paginacja:** 20 rekordów na stronę w listach rezerwacji i użytkowników; aktywne filtry
+  są zachowywane między stronami.
+* **Bezpieczne operacje:** usuwanie wyłącznie metodą POST, z potwierdzeniem `data-confirm`;
+  komunikaty błędów nie ujawniają danych technicznych (szczegóły trafiają do logu).
 * **Wygląd:** ciemny, industrialny motyw „beton i stal” (grafit, żółty akcent ostrzegawczy,
   pasy hazardowe, kondensowana typografia Oswald) oparty na lokalnym Bootstrapie 5.3
   (`public/vendor/`) i `data-bs-theme="dark"`, bez zewnętrznego CDN.
@@ -480,7 +528,8 @@ Podczas wdrażania aplikacji w środowisku produkcyjnym należy zadbać między 
 ### Etap 1
 
 * **Zamrożenie ceny w rezerwacji:** tabela `reservations` przechowuje `final_price` niezależnie od cennika — wdrożone.
-* **Wyszukiwanie i paginacja, AJAX z terminami, historia zmian statusów:** zaplanowane — brak ich jeszcze w kodzie.
+* **Wyszukiwanie i paginacja list administracyjnych:** wdrożone w etapie 3 (rezerwacje i użytkownicy).
+* **AJAX z terminami i historia zmian statusów:** zaplanowane — brak ich jeszcze w kodzie.
 
 ---
 
@@ -504,13 +553,18 @@ Projekt jest rozwijany w ramach prac nad systemem rezerwacji usług budowlanych.
 
 | # | Zadanie | Status |
 |---|---------|--------|
-| 1 | Layout panelu, routing i kontrola dostępu | ukończone |
-| 2 | CRUD kategorii usług | ukończone |
-| 3 | CRUD usług (kategoria, cena, czas, aktywność) | ukończone |
-| 4 | Zarządzanie pracownikami i zakładanie kont | ukończone |
-| 5 | Przypisywanie wielu usług pracownikowi (N:M) | ukończone |
-| 6 | Ciemny motyw oparty na Bootstrapie 5.3 | ukończone |
-| 7 | Dashboard z licznikami i najbliższymi rezerwacjami | ukończone |
+| 1 | Layout panelu, routing, kontrola dostępu | ukończone |
+| 2 | Dashboard z licznikami i najbliższymi rezerwacjami | ukończone |
+| 3 | CRUD kategorii usług | ukończone |
+| 4 | CRUD usług (kategoria, cena, czas, aktywność) | ukończone |
+| 5 | Zarządzanie pracownikami i zakładanie kont | ukończone |
+| 6 | Przypisywanie wielu usług pracownikowi (N:M) | ukończone |
+| 7 | Zarządzanie dostępnością pracownika | ukończone |
+| 8 | Zarządzanie użytkownikami (role, blokada) | ukończone |
+| 9 | Moduł rezerwacji (lista, filtry, status) | ukończone |
+| 10 | Paginacja i wyszukiwanie | ukończone |
+| 11 | Ciemny motyw Bootstrap 5.3 | ukończone |
+| 12 | Obraz GHCR i deploy | ukończone |
 
 ### Etap 2 — zadania
 
@@ -532,5 +586,5 @@ Projekt jest rozwijany w ramach prac nad systemem rezerwacji usług budowlanych.
 | 14 | Weryfikacja adresu e-mail po rejestracji, polityka B (#72) | ukończone |
 | 15 | Usunięcie transportu poczty (linki na ekranie) i minimalizacja `.env` | ukończone |
 
-Kolejne elementy systemu mogą obejmować rozwój panelu pracownika i administratora
-(usługi, harmonogramy, rezerwacje) oraz dalsze usprawnienia procesu obsługi rezerwacji.
+Kolejne elementy systemu mogą obejmować panel pracownika, proces rezerwacji po stronie
+klienta oraz dalsze usprawnienia obsługi rezerwacji.
