@@ -18,6 +18,7 @@ error_reporting(E_ALL);
 require BASE_PATH . '/app/helpers/csrf.php';
 require BASE_PATH . '/app/helpers/auth.php';
 require BASE_PATH . '/app/helpers/validation.php';
+require BASE_PATH . '/app/helpers/pagination.php';
 require BASE_PATH . '/app/helpers/url.php';
 require BASE_PATH . '/app/helpers/token.php';
 require BASE_PATH . '/app/models/Database.php';

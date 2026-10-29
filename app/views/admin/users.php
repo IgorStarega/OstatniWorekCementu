@@ -5,12 +5,22 @@ $roleBadgeClasses = [
     'admin'     => 'text-bg-warning',
 ];
 
-$actionParams = ['page' => 'admin-users'];
+$currentPage = (int) ($pagination['page'] ?? 1);
+
+$filterParams = [];
 if ($roleFilter !== null) {
-    $actionParams['role'] = $roleFilter;
+    $filterParams['role'] = $roleFilter;
 }
 if ($activeFilter !== null) {
-    $actionParams['active'] = (string) $activeFilter;
+    $filterParams['active'] = (string) $activeFilter;
+}
+if ($qFilter !== '') {
+    $filterParams['q'] = $qFilter;
+}
+
+$actionParams = ['page' => 'admin-users'] + $filterParams;
+if ($currentPage > 1) {
+    $actionParams['p'] = $currentPage;
 }
 $actionUrl = '/?' . http_build_query($actionParams);
 ?>
@@ -31,6 +41,12 @@ $actionUrl = '/?' . http_build_query($actionParams);
         <input type="hidden" name="page" value="admin-users">
         <div class="row align-items-end g-2">
             <div class="col-md-4">
+                <label class="form-label" for="users-q">Szukaj</label>
+                <input class="form-control" id="users-q" name="q" type="search" maxlength="100"
+                       placeholder="imię, nazwisko lub e-mail"
+                       value="<?= htmlspecialchars($qFilter, ENT_QUOTES, 'UTF-8') ?>">
+            </div>
+            <div class="col-md-3">
                 <label class="form-label" for="users-role">Rola</label>
                 <select class="form-select" id="users-role" name="role">
                     <option value="">— wszyscy —</option>
@@ -42,7 +58,7 @@ $actionUrl = '/?' . http_build_query($actionParams);
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-2">
                 <label class="form-label" for="users-active">Aktywny</label>
                 <select class="form-select" id="users-active" name="active">
                     <option value="">— wszyscy —</option>
@@ -50,7 +66,7 @@ $actionUrl = '/?' . http_build_query($actionParams);
                     <option value="0" <?= $activeFilter === 0 ? 'selected' : '' ?>>zablokowani (0)</option>
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="d-flex flex-wrap gap-2">
                     <button type="submit" class="btn btn-outline-light">Filtruj</button>
                     <a class="btn btn-outline-light" href="/?page=admin-users">Wyczyść filtry</a>
@@ -153,6 +169,10 @@ $actionUrl = '/?' . http_build_query($actionParams);
                     <?php endforeach; ?>
                 </tbody>
             </table>
+        </div>
+
+        <div class="mt-3">
+            <?= renderPagination($pagination, 'p', $filterParams) ?>
         </div>
     <?php endif; ?>
 </div>

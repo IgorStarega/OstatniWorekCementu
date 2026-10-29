@@ -12,8 +12,59 @@ class User
         $this->pdo = $pdo;
     }
 
-    // Lista użytkowników z opcjonalnymi filtrami. Walidacja whitelisty ról w modelu.
-    public function allWithFilters(?string $role, ?int $active): array
+    // Lista użytkowników z opcjonalnymi filtrami i paginacją.
+    // Walidacja whitelisty ról pozostaje w modelu.
+    public function allWithFilters(
+        ?string $role,
+        ?int $active,
+        string $q = '',
+        int $limit = 0,
+        int $offset = 0
+    ): array {
+        [$where, $params] = $this->buildWhere($role, $active, $q);
+
+        $sql = 'SELECT id, first_name, last_name, email, phone, role, is_active, created_at
+                FROM users'
+            . $where
+            . ' ORDER BY created_at DESC, id DESC';
+
+        if ($limit > 0) {
+            $sql .= ' LIMIT :limit OFFSET :offset';
+        }
+
+        $statement = $this->pdo->prepare($sql);
+
+        foreach ($params as $name => $value) {
+            $statement->bindValue(
+                ':' . $name,
+                $value,
+                is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR
+            );
+        }
+
+        if ($limit > 0) {
+            $statement->bindValue(':limit', $limit, PDO::PARAM_INT);
+            $statement->bindValue(':offset', max(0, $offset), PDO::PARAM_INT);
+        }
+
+        $statement->execute();
+
+        return $statement->fetchAll();
+    }
+
+    // Liczba użytkowników dla tych samych filtrów co lista.
+    public function countWithFilters(?string $role, ?int $active, string $q = ''): int
+    {
+        [$where, $params] = $this->buildWhere($role, $active, $q);
+
+        $statement = $this->pdo->prepare('SELECT COUNT(*) FROM users' . $where);
+        $statement->execute($params);
+
+        return (int) $statement->fetchColumn();
+    }
+
+    // Wspólne warunki dla listy i licznika. Każdy warunek ma własny placeholder.
+    private function buildWhere(?string $role, ?int $active, string $q): array
     {
         $conditions = [];
         $params = [];
@@ -28,15 +79,18 @@ class User
             $params['active'] = $active === 1 ? 1 : 0;
         }
 
-        $statement = $this->pdo->prepare(
-            'SELECT id, first_name, last_name, email, phone, role, is_active, created_at
-             FROM users'
-            . ($conditions === [] ? '' : ' WHERE ' . implode(' AND ', $conditions))
-            . ' ORDER BY created_at DESC'
-        );
-        $statement->execute($params);
+        if ($q !== '') {
+            $conditions[] = '(first_name LIKE :q_first OR last_name LIKE :q_last OR email LIKE :q_email)';
+            $like = '%' . $q . '%';
+            $params['q_first'] = $like;
+            $params['q_last'] = $like;
+            $params['q_email'] = $like;
+        }
 
-        return $statement->fetchAll();
+        return [
+            $conditions === [] ? '' : ' WHERE ' . implode(' AND ', $conditions),
+            $params,
+        ];
     }
 
     // Zmiana roli — whitelist ['klient','pracownik','admin'] W MODELU.

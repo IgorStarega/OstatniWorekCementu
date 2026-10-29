@@ -14,16 +14,34 @@ class Reservation
 
     // Lista rezerwacji z danymi klienta, pracownika i usługi.
     // Filtry trafiają wyłącznie jako placeholdery — nigdy do treści SQL.
-    public function list(array $filters): array
+    public function list(array $filters, int $limit = 0, int $offset = 0): array
     {
         [$where, $params] = $this->buildWhere($filters);
 
-        $statement = $this->pdo->prepare(
-            $this->baseSelect()
+        $sql = $this->baseSelect()
             . $where
-            . ' ORDER BY r.reservation_date DESC, r.start_time DESC'
-        );
-        $statement->execute($params);
+            . ' ORDER BY r.reservation_date DESC, r.start_time DESC, r.id DESC';
+
+        if ($limit > 0) {
+            $sql .= ' LIMIT :limit OFFSET :offset';
+        }
+
+        $statement = $this->pdo->prepare($sql);
+
+        foreach ($params as $name => $value) {
+            $statement->bindValue(
+                ':' . $name,
+                $value,
+                is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR
+            );
+        }
+
+        if ($limit > 0) {
+            $statement->bindValue(':limit', $limit, PDO::PARAM_INT);
+            $statement->bindValue(':offset', max(0, $offset), PDO::PARAM_INT);
+        }
+
+        $statement->execute();
 
         return $statement->fetchAll();
     }
@@ -141,6 +159,16 @@ class Reservation
         if (isset($filters['employee_id']) && (int) $filters['employee_id'] > 0) {
             $conditions[] = 'r.employee_id = :employee_id';
             $params['employee_id'] = (int) $filters['employee_id'];
+        }
+
+        // Trzy osobne placeholdery — MySQL z natywnymi prepared statements
+        // nie pozwala użyć tego samego nazwanego parametru kilka razy.
+        if (isset($filters['q']) && is_string($filters['q']) && $filters['q'] !== '') {
+            $conditions[] = '(u.first_name LIKE :q_first OR u.last_name LIKE :q_last OR s.name LIKE :q_service)';
+            $like = '%' . $filters['q'] . '%';
+            $params['q_first'] = $like;
+            $params['q_last'] = $like;
+            $params['q_service'] = $like;
         }
 
         return [

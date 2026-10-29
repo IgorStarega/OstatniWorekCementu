@@ -9,15 +9,22 @@ $statusClasses = [
 
 // Filtry zachowujemy w linkach i formularzach, żeby nie zgubić kontekstu listy.
 $filterParams = [];
-foreach (['date_from', 'date_to', 'status', 'employee_id'] as $filterKey) {
+foreach (['date_from', 'date_to', 'status', 'employee_id', 'q'] as $filterKey) {
     if (isset($filters[$filterKey]) && $filters[$filterKey] !== '') {
         $filterParams[$filterKey] = $filters[$filterKey];
     }
 }
-$filterQuery = http_build_query($filterParams);
-$filterSuffix = $filterQuery === ''
+
+// Linki powrotu zachowują także numer strony (parametr p).
+$returnParams = $filterParams;
+$currentPage = (int) ($pagination['page'] ?? 1);
+if ($currentPage > 1) {
+    $returnParams['p'] = $currentPage;
+}
+$returnQuery = http_build_query($returnParams);
+$returnSuffix = $returnQuery === ''
     ? ''
-    : '&amp;' . htmlspecialchars($filterQuery, ENT_QUOTES, 'UTF-8');
+    : '&amp;' . htmlspecialchars($returnQuery, ENT_QUOTES, 'UTF-8');
 ?>
 
 <?php if ($reservation === null): ?>
@@ -39,6 +46,12 @@ $filterSuffix = $filterQuery === ''
             <input type="hidden" name="page" value="admin-reservations">
 
             <div class="row">
+                <div class="col-12">
+                    <label class="form-label" for="filter-q">Szukaj</label>
+                    <input class="form-control" id="filter-q" name="q" type="search" maxlength="100"
+                           placeholder="imię/nazwisko klienta lub nazwa usługi"
+                           value="<?= htmlspecialchars((string) ($filters['q'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                </div>
                 <div class="col-sm-6 col-lg-3">
                     <label class="form-label" for="filter-date-from">Data od</label>
                     <input class="form-control" id="filter-date-from" name="date_from" type="date"
@@ -126,13 +139,17 @@ $filterSuffix = $filterQuery === ''
                                 <td data-label="Akcje">
                                     <div class="admin-actions justify-content-end">
                                         <a class="btn btn-sm btn-outline-light"
-                                           href="/?page=admin-reservations&amp;id=<?= (int) $row['id'] ?><?= $filterSuffix ?>">Szczegóły</a>
+                                           href="/?page=admin-reservations&amp;id=<?= (int) $row['id'] ?><?= $returnSuffix ?>">Szczegóły</a>
                                     </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+            </div>
+
+            <div class="mt-3">
+                <?= renderPagination($pagination, 'p', $filterParams) ?>
             </div>
         <?php endif; ?>
     </div>
@@ -148,7 +165,7 @@ $filterSuffix = $filterQuery === ''
             <p class="text-muted mb-0">Szczegóły zgłoszenia klienta.</p>
         </div>
         <a class="btn btn-outline-light btn-sm"
-           href="/?page=admin-reservations<?= $filterSuffix ?>">Wróć do listy</a>
+           href="/?page=admin-reservations<?= $returnSuffix ?>">Wróć do listy</a>
     </div>
 
     <?php foreach ($errors as $error): ?>
@@ -222,6 +239,8 @@ $filterSuffix = $filterQuery === ''
             <input type="hidden" name="date_to" value="<?= htmlspecialchars($filters['date_to'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="status_filter" value="<?= htmlspecialchars($filters['status'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="employee_id" value="<?= htmlspecialchars((string) ($filters['employee_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+            <input type="hidden" name="q" value="<?= htmlspecialchars((string) ($filters['q'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+            <input type="hidden" name="p" value="<?= (int) ($pagination['page'] ?? 1) ?>">
 
             <div class="row align-items-end">
                 <div class="col-sm-6 col-lg-4">

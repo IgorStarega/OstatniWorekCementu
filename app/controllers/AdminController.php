@@ -4,7 +4,8 @@ class AdminController
 {
     private $config;
 
-    public function __construct(array $config)
+    // Konstruktor nie jest trasą panelu — requireRole pilnuje każdej metody publicznej.
+    function __construct(array $config)
     {
         $this->config = $config;
     }
@@ -63,10 +64,9 @@ class AdminController
                 $name = trim(postString('name'));
                 $description = trim(postString('description'));
 
-                $nameError = validationCategoryName($name);
-                if ($nameError !== null) {
-                    $errors[] = $nameError;
-                }
+                $errors = array_merge($errors, collectErrors([
+                    validationCategoryName($name),
+                ]));
 
                 if ($action === 'update' && ($editingId < 1 || $categories->find($editingId) === null)) {
                     $errors[] = 'Nie znaleziono kategorii do edycji.';
@@ -166,15 +166,11 @@ class AdminController
                 $price = trim(postString('price'));
                 $isActive = isset($_POST['is_active']);
 
-                foreach ([
+                $errors = array_merge($errors, collectErrors([
                     validationServiceName($name),
                     validationDurationMinutes($durationMinutes),
                     validationPrice($price),
-                ] as $error) {
-                    if ($error !== null) {
-                        $errors[] = $error;
-                    }
-                }
+                ]));
 
                 if ($categoryId < 1 || $categories->find($categoryId) === null) {
                     $errors[] = 'Wybierz istniejącą kategorię usługi.';
@@ -296,22 +292,15 @@ class AdminController
                 $password = postString('password');
                 $employee = $editingId > 0 ? $employees->find($editingId) : null;
 
-                foreach ([
+                $errors = array_merge($errors, collectErrors([
                     validationFirstName($firstName),
                     validationLastName($lastName),
                     validationEmail($email),
                     validationPhone($phone),
-                ] as $error) {
-                    if ($error !== null) {
-                        $errors[] = $error;
-                    }
-                }
+                ]));
 
                 if ($action === 'create') {
-                    $passwordError = validationPassword($password);
-                    if ($passwordError !== null) {
-                        $errors[] = $passwordError;
-                    }
+                    $errors = array_merge($errors, collectErrors([validationPassword($password)]));
                 }
 
                 if ($action === 'update' && $employee === null) {
@@ -590,12 +579,21 @@ class AdminController
         $activeRaw = $this->getString('active');
         $active = $activeRaw === '0' ? 0 : ($activeRaw === '1' ? 1 : null);
 
+        $q = mb_substr(trim($this->getString('q')), 0, 100);
+        $currentPage = max(1, $this->getInt('p'));
+
         $preservedFilters = [];
         if ($role !== null) {
             $preservedFilters['role'] = $role;
         }
         if ($active !== null) {
             $preservedFilters['active'] = $active;
+        }
+        if ($q !== '') {
+            $preservedFilters['q'] = $q;
+        }
+        if ($currentPage > 1) {
+            $preservedFilters['p'] = $currentPage;
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -645,10 +643,20 @@ class AdminController
             $this->redirect('admin-users', $preservedFilters);
         }
 
+        $pagination = paginate($usersModel->countWithFilters($role, $active, $q), 20, $currentPage);
+
         $this->render('users', 'Użytkownicy', [
-            'users'        => $usersModel->allWithFilters($role, $active),
+            'users'        => $usersModel->allWithFilters(
+                $role,
+                $active,
+                $q,
+                20,
+                $pagination['offset']
+            ),
             'roleFilter'   => $role,
             'activeFilter' => $active,
+            'qFilter'      => $q,
+            'pagination'   => $pagination,
             'errors'       => [],
             'flash'        => $this->takeFlash(),
         ]);
@@ -663,12 +671,21 @@ class AdminController
         $errors = [];
         $filters = $this->reservationFilters();
 
+        // Numer strony trzymamy w parametrze p — samo "page" należy do routingu.
+        $currentPage = max(
+            1,
+            $_SERVER['REQUEST_METHOD'] === 'POST' ? $this->postId('p') : $this->getInt('p')
+        );
+
         // Filtry odtwarzamy po zmianie statusu, żeby redirect wracał na tę samą listę.
         $preservedFilters = [];
-        foreach (['date_from', 'date_to', 'status', 'employee_id'] as $key) {
+        foreach (['date_from', 'date_to', 'status', 'employee_id', 'q'] as $key) {
             if (isset($filters[$key])) {
                 $preservedFilters[$key] = $filters[$key];
             }
+        }
+        if ($currentPage > 1) {
+            $preservedFilters['p'] = $currentPage;
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -704,10 +721,15 @@ class AdminController
             }
         }
 
+        $pagination = paginate($model->count($filters), 20, $currentPage);
+
         $this->render('reservations', 'Rezerwacje', [
-            'reservations' => $reservation === null ? $model->list($filters) : [],
+            'reservations' => $reservation === null
+                ? $model->list($filters, 20, $pagination['offset'])
+                : [],
             'reservation'  => $reservation,
             'filters'      => $filters,
+            'pagination'   => $pagination,
             'employees'    => $employeesModel->all(),
             'statuses'     => Reservation::STATUSES,
             'errors'       => $errors,
@@ -833,6 +855,12 @@ class AdminController
                 && checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1])) {
                 $filters[$key] = $value;
             }
+        }
+
+        // Wyszukiwanie po kliencie lub nazwie usługi — maksymalnie 100 znaków.
+        $q = mb_substr(trim($isPost ? postString('q') : $this->getString('q')), 0, 100);
+        if ($q !== '') {
+            $filters['q'] = $q;
         }
 
         // W POST filtrem jest status_filter; pole status należy do zmiany statusu.

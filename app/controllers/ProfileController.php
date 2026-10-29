@@ -42,15 +42,11 @@ class ProfileController
                 $phone = trim(postString('phone'));
 
                 // Walidacja serwerowa identyczna jak przy rejestracji (wspólny helper).
-                foreach ([
+                $errors = array_merge($errors, collectErrors([
                     validationFirstName($firstName),
                     validationLastName($lastName),
                     validationPhone($phone),
-                ] as $error) {
-                    if ($error !== null) {
-                        $errors[] = $error;
-                    }
-                }
+                ]));
 
                 if ($errors === []) {
                     // ID wyłącznie z sesji (currentUserId) — żadnego ID z POST/GET (ochrona przed IDOR).
