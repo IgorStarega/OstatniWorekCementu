@@ -73,6 +73,8 @@ cleanup() {
     # Konto blokowane w teście 16 musi po skrypcie zostać odblokowane.
     dbq "UPDATE users SET failed_attempts = 0, locked_until = NULL
          WHERE email = 'tomasz.zielinski@example.com'" >/dev/null 2>&1
+    # Kategoria z testu XSS nie może zostać w bazie po przerwanym przebiegu.
+    dbq "DELETE FROM service_categories WHERE name = '<script>alert(1)</script>'" >/dev/null 2>&1
     rm -rf "$TMP"
 }
 trap cleanup EXIT
@@ -507,6 +509,31 @@ if [ "$code" = "200" ] && ! grep -qi 'usunięt' "$TMP/body"; then
     pass "28. GET nie usuwa kategorii"
 else
     fail "28. GET nie usuwa kategorii" "kod=$code"
+fi
+
+# --- 29. XSS w formularzu admina ----------------------------------------
+CSRF=$(get_csrf "$BASE_URL/?page=admin-categories" "$JAR_ADMIN")
+req POST "$BASE_URL/?page=admin-categories" -b "$JAR_ADMIN" -c "$JAR_ADMIN" >/dev/null \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "action=create" \
+    --data-urlencode "name=<script>alert(1)</script>" \
+    --data-urlencode "description=xss-test"
+req GET "$BASE_URL/?page=admin-categories" -b "$JAR_ADMIN" -c "$JAR_ADMIN" >/dev/null
+if grep -q '&lt;script&gt;' "$TMP/body" && ! grep -q '<script>alert(1)</script>' "$TMP/body"; then
+    pass "29. XSS w kategorii zescapedowany"
+else
+    fail "29. XSS w kategorii zescapedowany" "brak escapowania"
+fi
+# sprzątanie: usuń kategorię testową przez POST
+XSS_CATEGORY_ID=$(dbq "SELECT id FROM service_categories
+                       WHERE name = '<script>alert(1)</script>'
+                       ORDER BY id DESC LIMIT 1")
+if [ -n "$XSS_CATEGORY_ID" ]; then
+    CSRF=$(get_csrf "$BASE_URL/?page=admin-categories" "$JAR_ADMIN")
+    req POST "$BASE_URL/?page=admin-categories" -b "$JAR_ADMIN" -c "$JAR_ADMIN" >/dev/null \
+        --data-urlencode "csrf_token=$CSRF" \
+        --data-urlencode "action=delete" \
+        --data-urlencode "id=$XSS_CATEGORY_ID"
 fi
 
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------

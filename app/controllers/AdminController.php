@@ -64,10 +64,9 @@ class AdminController
                 $name = trim(postString('name'));
                 $description = trim(postString('description'));
 
-                $nameError = validationCategoryName($name);
-                if ($nameError !== null) {
-                    $errors[] = $nameError;
-                }
+                $errors = array_merge($errors, collectErrors([
+                    validationCategoryName($name),
+                ]));
 
                 if ($action === 'update' && ($editingId < 1 || $categories->find($editingId) === null)) {
                     $errors[] = 'Nie znaleziono kategorii do edycji.';
@@ -167,15 +166,11 @@ class AdminController
                 $price = trim(postString('price'));
                 $isActive = isset($_POST['is_active']);
 
-                foreach ([
+                $errors = array_merge($errors, collectErrors([
                     validationServiceName($name),
                     validationDurationMinutes($durationMinutes),
                     validationPrice($price),
-                ] as $error) {
-                    if ($error !== null) {
-                        $errors[] = $error;
-                    }
-                }
+                ]));
 
                 if ($categoryId < 1 || $categories->find($categoryId) === null) {
                     $errors[] = 'Wybierz istniejącą kategorię usługi.';
@@ -297,22 +292,15 @@ class AdminController
                 $password = postString('password');
                 $employee = $editingId > 0 ? $employees->find($editingId) : null;
 
-                foreach ([
+                $errors = array_merge($errors, collectErrors([
                     validationFirstName($firstName),
                     validationLastName($lastName),
                     validationEmail($email),
                     validationPhone($phone),
-                ] as $error) {
-                    if ($error !== null) {
-                        $errors[] = $error;
-                    }
-                }
+                ]));
 
                 if ($action === 'create') {
-                    $passwordError = validationPassword($password);
-                    if ($passwordError !== null) {
-                        $errors[] = $passwordError;
-                    }
+                    $errors = array_merge($errors, collectErrors([validationPassword($password)]));
                 }
 
                 if ($action === 'update' && $employee === null) {

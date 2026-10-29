@@ -159,17 +159,13 @@ class AuthController
             $passwordConfirmation = postString('password_confirmation');
 
             // Backendowa walidacja danych wejściowych — reguły we wspólnym helperze.
-            foreach ([
+            $errors = array_merge($errors, collectErrors([
                 validationFirstName($firstName),
                 validationLastName($lastName),
                 validationEmail($email),
                 validationPhone($phone),
                 validationPassword($password),
-            ] as $error) {
-                if ($error !== null) {
-                    $errors[] = $error;
-                }
-            }
+            ]));
             if ($password !== $passwordConfirmation) {
                 $errors[] = 'Hasła nie są takie same.';
             }

@@ -9,6 +9,21 @@ function postString(string $key): string
     return is_string($_POST[$key] ?? null) ? $_POST[$key] : '';
 }
 
+// Zbiera komunikaty z listy wyników walidatorów, pomijając null.
+// Użycie: $errors = collectErrors([validationX($a), validationY($b)]);
+function collectErrors(array $results): array
+{
+    $errors = [];
+
+    foreach ($results as $result) {
+        if ($result !== null) {
+            $errors[] = $result;
+        }
+    }
+
+    return $errors;
+}
+
 // Imię: wymagane, od 2 do 50 znaków. Zwraca komunikat błędu albo null.
 function validationFirstName(string $firstName): ?string
 {
