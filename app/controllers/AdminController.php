@@ -4,7 +4,8 @@ class AdminController
 {
     private $config;
 
-    public function __construct(array $config)
+    // Konstruktor nie jest trasą panelu — requireRole pilnuje każdej metody publicznej.
+    function __construct(array $config)
     {
         $this->config = $config;
     }

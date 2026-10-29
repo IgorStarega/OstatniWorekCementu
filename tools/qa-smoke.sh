@@ -500,6 +500,15 @@ else
     fail "27b. admin-users: wstrzyknięte filtry zignorowane" "kod=$code"
 fi
 
+# --- 28. Operacje destrukcyjne tylko przez POST --------------------------
+# GET na akcję usuwania nie może niczego usunąć (brak action=delete w URL).
+code=$(req GET "$BASE_URL/?page=admin-categories&action=delete&id=1" -b "$JAR_ADMIN" -c "$JAR_ADMIN")
+if [ "$code" = "200" ] && ! grep -qi 'usunięt' "$TMP/body"; then
+    pass "28. GET nie usuwa kategorii"
+else
+    fail "28. GET nie usuwa kategorii" "kod=$code"
+fi
+
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------
 skip "Widok 500 przy błędnym DB_PASS" "wymaga restartu kontenera z innym DB_PASS (environment w compose); nie testujemy w tym przebiegu"
 skip "Wizualna ocena formularzy / responsywność / czytelność błędów" "wymaga przeglądarki — patrz tools/qa-manual.md"

@@ -135,9 +135,8 @@
                                     </form>
 
                                     <form method="post" action="/?page=admin-services"
-                                          data-confirm="Czy na pewno usunąć usługę „<?= htmlspecialchars((string) $service['name'], ENT_QUOTES, 'UTF-8') ?>”?">
+                                          data-confirm="Czy na pewno usunąć usługę „<?= htmlspecialchars((string) $service['name'], ENT_QUOTES, 'UTF-8') ?>”? Operacji nie można cofnąć."><input type="hidden" name="action" value="delete">
                                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
-                                        <input type="hidden" name="action" value="delete">
                                         <input type="hidden" name="id" value="<?= (int) $service['id'] ?>">
                                         <button type="submit" class="btn btn-sm btn-outline-danger">Usuń</button>
                                     </form>
