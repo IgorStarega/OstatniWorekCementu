@@ -536,6 +536,29 @@ if [ -n "$XSS_CATEGORY_ID" ]; then
         --data-urlencode "id=$XSS_CATEGORY_ID"
 fi
 
+# --- 30. Paginacja: nieprawidłowe parametry -----------------------------
+code=$(req GET "$BASE_URL/?page=admin-reservations&p=abc" -b "$JAR_ADMIN" -c "$JAR_ADMIN")
+if [ "$code" = "200" ] && ! grep -qE 'Fatal error|SQLSTATE' "$TMP/body"; then
+    pass "30. paginacja: p=abc -> strona 1"
+else
+    fail "30. paginacja: p=abc -> strona 1" "kod=$code"
+fi
+
+code=$(req GET "$BASE_URL/?page=admin-reservations&p=-5" -b "$JAR_ADMIN" -c "$JAR_ADMIN")
+if [ "$code" = "200" ] && ! grep -qE 'Fatal error|SQLSTATE' "$TMP/body"; then
+    pass "31. paginacja: p=-5 -> strona 1"
+else
+    fail "31. paginacja: p=-5 -> strona 1" "kod=$code"
+fi
+
+# --- 32. Wyszukiwanie: wstrzyknięcie ------------------------------------
+code=$(req GET "$BASE_URL/?page=admin-reservations&q=%27%20OR%201%3D1--" -b "$JAR_ADMIN" -c "$JAR_ADMIN")
+if [ "$code" = "200" ] && ! grep -qE 'SQLSTATE|Fatal error' "$TMP/body"; then
+    pass "32. wyszukiwanie odporne na wstrzyknięcie"
+else
+    fail "32. wyszukiwanie odporne na wstrzyknięcie" "kod=$code"
+fi
+
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------
 skip "Widok 500 przy błędnym DB_PASS" "wymaga restartu kontenera z innym DB_PASS (environment w compose); nie testujemy w tym przebiegu"
 skip "Wizualna ocena formularzy / responsywność / czytelność błędów" "wymaga przeglądarki — patrz tools/qa-manual.md"

@@ -579,12 +579,21 @@ class AdminController
         $activeRaw = $this->getString('active');
         $active = $activeRaw === '0' ? 0 : ($activeRaw === '1' ? 1 : null);
 
+        $q = mb_substr(trim($this->getString('q')), 0, 100);
+        $currentPage = max(1, $this->getInt('p'));
+
         $preservedFilters = [];
         if ($role !== null) {
             $preservedFilters['role'] = $role;
         }
         if ($active !== null) {
             $preservedFilters['active'] = $active;
+        }
+        if ($q !== '') {
+            $preservedFilters['q'] = $q;
+        }
+        if ($currentPage > 1) {
+            $preservedFilters['p'] = $currentPage;
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -634,10 +643,20 @@ class AdminController
             $this->redirect('admin-users', $preservedFilters);
         }
 
+        $pagination = paginate($usersModel->countWithFilters($role, $active, $q), 20, $currentPage);
+
         $this->render('users', 'Użytkownicy', [
-            'users'        => $usersModel->allWithFilters($role, $active),
+            'users'        => $usersModel->allWithFilters(
+                $role,
+                $active,
+                $q,
+                20,
+                $pagination['offset']
+            ),
             'roleFilter'   => $role,
             'activeFilter' => $active,
+            'qFilter'      => $q,
+            'pagination'   => $pagination,
             'errors'       => [],
             'flash'        => $this->takeFlash(),
         ]);
@@ -652,12 +671,21 @@ class AdminController
         $errors = [];
         $filters = $this->reservationFilters();
 
+        // Numer strony trzymamy w parametrze p — samo "page" należy do routingu.
+        $currentPage = max(
+            1,
+            $_SERVER['REQUEST_METHOD'] === 'POST' ? $this->postId('p') : $this->getInt('p')
+        );
+
         // Filtry odtwarzamy po zmianie statusu, żeby redirect wracał na tę samą listę.
         $preservedFilters = [];
-        foreach (['date_from', 'date_to', 'status', 'employee_id'] as $key) {
+        foreach (['date_from', 'date_to', 'status', 'employee_id', 'q'] as $key) {
             if (isset($filters[$key])) {
                 $preservedFilters[$key] = $filters[$key];
             }
+        }
+        if ($currentPage > 1) {
+            $preservedFilters['p'] = $currentPage;
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -693,10 +721,15 @@ class AdminController
             }
         }
 
+        $pagination = paginate($model->count($filters), 20, $currentPage);
+
         $this->render('reservations', 'Rezerwacje', [
-            'reservations' => $reservation === null ? $model->list($filters) : [],
+            'reservations' => $reservation === null
+                ? $model->list($filters, 20, $pagination['offset'])
+                : [],
             'reservation'  => $reservation,
             'filters'      => $filters,
+            'pagination'   => $pagination,
             'employees'    => $employeesModel->all(),
             'statuses'     => Reservation::STATUSES,
             'errors'       => $errors,
@@ -822,6 +855,12 @@ class AdminController
                 && checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1])) {
                 $filters[$key] = $value;
             }
+        }
+
+        // Wyszukiwanie po kliencie lub nazwie usługi — maksymalnie 100 znaków.
+        $q = mb_substr(trim($isPost ? postString('q') : $this->getString('q')), 0, 100);
+        if ($q !== '') {
+            $filters['q'] = $q;
         }
 
         // W POST filtrem jest status_filter; pole status należy do zmiany statusu.
