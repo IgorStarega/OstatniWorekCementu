@@ -17,6 +17,7 @@ System internetowy do obsługi firmy budowlanej oraz rezerwacji usług budowlany
 * [Uruchomienie](#uruchomienie)
 * [Deploy bez lokalnego repozytorium](#deploy-bez-lokalnego-repozytorium)
 * [Testy](#testy)
+* [QA przed oddaniem etapu](#qa-przed-oddaniem-etapu)
 * [Konfiguracja](#konfiguracja)
 * [Bezpieczeństwo](#bezpieczeństwo)
 * [Funkcje dodatkowe](#funkcje-dodatkowe)
@@ -397,10 +398,11 @@ przy kolejnym uruchomieniu.
 
 ## Testy
 
-Automatyczny smoke test (36 sekcji: sesja, CSRF, rejestracja z linkiem, weryfikacja, XSS, IDOR,
-trzy role, blokada konta, dostęp do panelu administratora, operacje destrukcyjne, paginacja
-i wyszukiwanie, schemat bazy, migracje, kodowanie polskich znaków, retencja) uruchamiamy
-przeciw działającemu stosowi:
+Automatyczny smoke test (68 punktów w 41 sekcjach: sesja, CSRF, rejestracja z linkiem,
+weryfikacja, XSS, IDOR, trzy role, blokada konta, dostęp do panelu administratora,
+operacje destrukcyjne, paginacja i wyszukiwanie użytkowników, favicon, ochrona
+własnego konta, schemat bazy, migracje, kodowanie polskich znaków, retencja)
+uruchamiamy przeciw działającemu stosowi:
 
 ```bash
 bash tools/qa-smoke.sh
@@ -410,6 +412,48 @@ Skrypt wymaga tylko `bash`, `curl`, `docker compose` i `grep`, zakłada `APP_ENV
 (linki potwierdzenia i resetu są widoczne na ekranie), jest idempotentny i po sobie sprząta.
 Wynik to `X/Y PASS`; kod wyjścia `1`, gdy cokolwiek padło. Rzeczy wymagające przeglądarki
 (ocena wizualna, responsywność, czytelność błędów) są w checkliście `tools/qa-manual.md`.
+
+---
+
+## QA przed oddaniem etapu
+
+### Automat
+
+```bash
+bash tools/qa-smoke.sh
+```
+
+Wynik: `68/68 PASS`, 0 FAIL, 2 SKIP. SKIP-y wymagają przeglądarki lub restartu
+kontenera — opisane poniżej.
+
+### Manualnie — czego automat nie sprawdzi
+
+**Widok 500 przy złej konfiguracji.** Podmień `MYSQL_PASSWORD` w `.env` na błędne
+(compose przekazuje je aplikacji jako `DB_PASS`):
+
+```bash
+docker compose up -d --force-recreate app
+curl -s http://localhost:8082/?page=home | grep -c 'SQLSTATE\|Stack trace'
+```
+
+Oczekiwane: `0` — użytkownik widzi neutralny komunikat, szczegóły lądują
+w `/var/log/php/error.log`. Przywróć poprawne `MYSQL_PASSWORD` po teście.
+
+**Responsywność.** Panel administratora na 375 px: sidebar przechodzi nad treść,
+brak poziomego przewijania, tabele czytelne.
+
+### Kontrola dostępu (PDF 5.2)
+
+Każdy adres `?page=admin-*` jako klient i jako gość → 403 albo redirect na login.
+Automat pokrywa to testem 21 (8 stron × 3 role).
+
+### Sekrety w historii Git
+
+```bash
+git log -p | grep -iE "password|secret|api[_-]?key" | head -50
+```
+
+Poza `.env.example` nie może nic wyjść.
 
 ---
 
