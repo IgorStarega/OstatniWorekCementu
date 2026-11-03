@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="8" fill="#0b0d0f"/>
+  <path d="M8 8h48v6H8z" fill="#facc15"/>
+  <path d="M8 50h48v6H8z" fill="#facc15"/>
+  <text x="32" y="41" font-family="Oswald, Arial Narrow, sans-serif"
+        font-size="26" font-weight="700" fill="#facc15"
+        text-anchor="middle">OWC</text>
+</svg>

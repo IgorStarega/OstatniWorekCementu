@@ -1,0 +1,15 @@
+version: 2
+
+# Automatyczne aktualizacje akcji GitHub Actions.
+# Dockerfile celowo pomijamy — PHP jest przypięte do 8.2, a Dependabot mógłby
+# zaproponować podbicie do nowszej gałęzi i wywołać nieplanowaną migrację.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
