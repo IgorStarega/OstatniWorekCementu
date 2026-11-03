@@ -77,6 +77,21 @@ jobs:
       - name: Budowa i start stosu
         run: docker compose up -d --build app
 
+      - name: Oczekiwanie na bazę i schemat
+        run: |
+          for attempt in $(seq 1 60); do
+            if docker compose exec -T db sh -c \
+              'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE" -N -B -e "SELECT 1 FROM users LIMIT 1"' \
+              >/dev/null 2>&1; then
+              echo "Baza i schemat gotowe po ${attempt} próbach."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Baza nie jest gotowa w ciągu 120 s."
+          docker compose logs --no-color --tail=200 db
+          exit 1
+
       - name: Oczekiwanie na aplikację
         run: |
           for attempt in $(seq 1 60); do

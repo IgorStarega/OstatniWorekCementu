@@ -315,7 +315,8 @@ Obraz z kodem aplikacji (`app/`, `config/`, `public/`) buduje i publikuje workfl
 * `lint` — składnia PHP (`php -l`), JS (`node --check`), skryptów bash oraz
   poprawność obu plików `docker-compose.yml`,
 * `test` — `docker compose up -d --build app` na `.env.example`, oczekiwanie na
-  odpowiedź aplikacji i pełny `tools/qa-smoke.sh` (te same testy co lokalnie),
+  bazę, schemat i odpowiedź aplikacji, a następnie pełny `tools/qa-smoke.sh`
+  (te same testy co lokalnie),
 * `publish` — dopiero po teście trafiają do GHCR tagi: `latest`, `main` i
   `sha-<skrót>` (dla `main`) oraz `X.Y.Z` i `X.Y` (dla taga `vX.Y.Z`).
 

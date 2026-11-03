@@ -89,6 +89,11 @@ if ! docker compose ps --status running --services 2>/dev/null | grep -qx "$DB_S
     exit 2
 fi
 
+if [ "$(dbq "SHOW TABLES LIKE 'users'")" != "users" ]; then
+    echo "BŁĄD: baza nie ma zaimportowanego schematu. Poczekaj na inicjalizację MySQL." >&2
+    exit 2
+fi
+
 if ! curl -fsS -o /dev/null "$BASE_URL/?page=home" 2>/dev/null; then
     echo "BŁĄD: aplikacja nie odpowiada pod $BASE_URL. Uruchom: docker compose up -d" >&2
     exit 2
