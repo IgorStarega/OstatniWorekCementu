@@ -75,6 +75,9 @@ cleanup() {
          WHERE email = 'tomasz.zielinski@example.com'" >/dev/null 2>&1
     # Kategoria z testu XSS nie może zostać w bazie po przerwanym przebiegu.
     dbq "DELETE FROM service_categories WHERE name = '<script>alert(1)</script>'" >/dev/null 2>&1
+    # Test zmiany roli przywraca konto Anny; własne konto admina zawsze aktywne.
+    dbq "UPDATE users SET role = 'klient' WHERE email = 'anna.kowalska@example.com'" >/dev/null 2>&1
+    dbq "UPDATE users SET is_active = 1 WHERE email = 'admin@ostatniworekcementu.pl'" >/dev/null 2>&1
     rm -rf "$TMP"
 }
 trap cleanup EXIT
@@ -557,6 +560,62 @@ if [ "$code" = "200" ] && ! grep -qE 'SQLSTATE|Fatal error' "$TMP/body"; then
     pass "32. wyszukiwanie odporne na wstrzyknięcie"
 else
     fail "32. wyszukiwanie odporne na wstrzyknięcie" "kod=$code"
+fi
+
+# --- 33. Favicon dostępny -----------------------------------------------
+code=$(req GET "$BASE_URL/favicon.svg")
+if [ "$code" = "200" ] && grep -qi 'svg' "$TMP/hdr"; then
+    pass "33. favicon.svg -> 200"
+else
+    fail "33. favicon.svg -> 200" "kod=$code"
+fi
+
+# --- 34. Paginacja użytkowników -----------------------------------------
+code=$(req GET "$BASE_URL/?page=admin-users&p=1" -b "$JAR_ADMIN" -c "$JAR_ADMIN")
+if [ "$code" = "200" ] && ! grep -qE 'Fatal error|SQLSTATE' "$TMP/body"; then
+    pass "34. admin-users paginacja p=1 -> 200"
+else
+    fail "34. admin-users paginacja p=1 -> 200" "kod=$code"
+fi
+
+# --- 35. Wyszukiwanie użytkowników --------------------------------------
+code=$(req GET "$BASE_URL/?page=admin-users&q=admin" -b "$JAR_ADMIN" -c "$JAR_ADMIN")
+if [ "$code" = "200" ] && grep -q 'admin@ostatniworekcementu.pl' "$TMP/body"; then
+    pass "35. admin-users q=admin znajduje konto"
+else
+    fail "35. admin-users q=admin znajduje konto" "kod=$code"
+fi
+
+# --- 36. Zmiana roli cudzego konta --------------------------------------
+# bierzemy konto klienta (id z seeda) i zmieniamy na pracownika, potem wracamy
+ANNA_ID=$(dbq "SELECT id FROM users WHERE email = 'anna.kowalska@example.com'")
+CSRF=$(get_csrf "$BASE_URL/?page=admin-users" "$JAR_ADMIN")
+code=$(req POST "$BASE_URL/?page=admin-users" -b "$JAR_ADMIN" -c "$JAR_ADMIN" \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "action=role" \
+    --data-urlencode "id=$ANNA_ID" \
+    --data-urlencode "role=pracownik")
+ROLE=$(dbq "SELECT role FROM users WHERE id = $ANNA_ID")
+if [ "$ROLE" = "pracownik" ]; then
+    pass "36. admin zmienia rolę cudzego konta"
+else
+    fail "36. admin zmienia rolę cudzego konta" "rola=$ROLE"
+fi
+# przywróć rolę klient
+dbq "UPDATE users SET role = 'klient' WHERE id = $ANNA_ID" >/dev/null 2>&1
+
+# --- 37. Ochrona własnego konta -----------------------------------------
+ADMIN_ID=$(dbq "SELECT id FROM users WHERE email = 'admin@ostatniworekcementu.pl'")
+CSRF=$(get_csrf "$BASE_URL/?page=admin-users" "$JAR_ADMIN")
+req POST "$BASE_URL/?page=admin-users" -b "$JAR_ADMIN" -c "$JAR_ADMIN" >/dev/null \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "action=toggle" \
+    --data-urlencode "id=$ADMIN_ID"
+ACTIVE=$(dbq "SELECT is_active FROM users WHERE id = $ADMIN_ID")
+if [ "$ACTIVE" = "1" ]; then
+    pass "37. własne konto nie da się zablokować"
+else
+    fail "37. własne konto nie da się zablokować" "is_active=$ACTIVE"
 fi
 
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------
