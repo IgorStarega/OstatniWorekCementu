@@ -82,6 +82,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# --- preflight -----------------------------------------------------------
+# Bez działającego stosu testy kończyłyby się dziesiątkami błędów curl (kod 000).
+if ! docker compose ps --status running --services 2>/dev/null | grep -qx "$DB_SERVICE"; then
+    echo "BŁĄD: usługa '$DB_SERVICE' nie działa. Uruchom: docker compose up -d" >&2
+    exit 2
+fi
+
+if ! curl -fsS -o /dev/null "$BASE_URL/?page=home" 2>/dev/null; then
+    echo "BŁĄD: aplikacja nie odpowiada pod $BASE_URL. Uruchom: docker compose up -d" >&2
+    exit 2
+fi
+
 # --- przygotowanie -------------------------------------------------------
 # Reset blokady na wypadek, gdyby poprzedni przebieg przerwał się przed cleanupem.
 dbq "UPDATE users SET failed_attempts = 0, locked_until = NULL
