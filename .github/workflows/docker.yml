@@ -58,6 +58,7 @@ jobs:
 
       - name: Walidacja konfiguracji Compose
         run: |
+          cp .env.example .env
           docker compose --env-file .env.example config --quiet
           (cd deploy && docker compose --env-file .env.example config --quiet)
 
