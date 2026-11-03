@@ -81,7 +81,7 @@ jobs:
         run: |
           for attempt in $(seq 1 60); do
             if docker compose exec -T db sh -c \
-              'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE" -N -B -e "SELECT 1 FROM users LIMIT 1"' \
+              'mysql -h 127.0.0.1 -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE" -N -B -e "SELECT 1 FROM users LIMIT 1"' \
               >/dev/null 2>&1; then
               echo "Baza i schemat gotowe po ${attempt} próbach."
               exit 0

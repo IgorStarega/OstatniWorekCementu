@@ -53,7 +53,7 @@ services:
       - ./config/mysql:/etc/mysql/conf.d:ro
       - ./database/database.sql:/docker-entrypoint-initdb.d/01-database.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD"]
       interval: 5s
       timeout: 3s
       retries: 20
