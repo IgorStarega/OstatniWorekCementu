@@ -310,16 +310,17 @@ Przy pierwszym starcie kontener `owc-db` importuje `database/database.sql`
 ## Obraz Docker (GHCR)
 
 Obraz z kodem aplikacji (`app/`, `config/`, `public/`) buduje i publikuje workflow
-`.github/workflows/docker.yml` w trzech krokach: **build → test → publish**.
+`.github/workflows/docker.yml` w trzech krokach: **lint → test → publish**.
 
-* `build` — walidacja składni PHP (`php -l`) i budowa obrazu; na push powstaje
-  tylko tymczasowy tag `sha-<sha commita>`,
-* `test` — obraz jest uruchamiany z MySQL, importowany jest `database/database.sql`
-  i wykonywany jest smoke test HTTP,
+* `lint` — składnia PHP (`php -l`), JS (`node --check`), skryptów bash oraz
+  poprawność obu plików `docker-compose.yml`,
+* `test` — `docker compose up -d --build app` na `.env.example`, oczekiwanie na
+  odpowiedź aplikacji i pełny `tools/qa-smoke.sh` (te same testy co lokalnie),
 * `publish` — dopiero po teście trafiają do GHCR tagi: `latest`, `main` i
   `sha-<skrót>` (dla `main`) oraz `X.Y.Z` i `X.Y` (dla taga `vX.Y.Z`).
 
-Pull requesty do `main` tylko lintują i budują obraz — bez push i bez publikacji.
+Pull requesty do `main` przechodzą lint i pełny test, ale nie publikują obrazu.
+Aktualizacje akcji GitHub Actions pilnuje Dependabot (`.github/dependabot.yml`).
 
 Adres obrazu: `ghcr.io/igorstarega/ostatniworekcementu:latest`.
 
