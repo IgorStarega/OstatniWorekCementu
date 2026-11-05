@@ -497,6 +497,16 @@ else
     fail "25. dashboard renders counters, no placeholder" "kod=$code"
 fi
 
+# --- 25b. Dashboard: sekcja statystyk -----------------------------------
+code=$(req GET "$BASE_URL/?page=admin-dashboard" -b "$JAR_DASH" -c "$JAR_DASH")
+if [ "$code" = "200" ] && grep -q 'Przychód' "$TMP/body" \
+   && grep -q 'Najczęściej' "$TMP/body" \
+   && ! grep -qE 'Fatal error|Warning|Uncaught' "$TMP/body"; then
+    pass "25b. dashboard renders statistics"
+else
+    fail "25b. dashboard renders statistics" "kod=$code"
+fi
+
 # --- 26. Dostępność pracownika: render tygodnia --------------------------
 JAR_AVAIL="$TMP/avail.txt"
 CSRF=$(get_csrf "$BASE_URL/?page=login" "$JAR_AVAIL")

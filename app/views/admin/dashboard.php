@@ -84,3 +84,112 @@ $tiles = [
         </div>
     <?php endif; ?>
 </div>
+
+<?php
+// Kolory słupków zgodne z badge'ami statusów rezerwacji.
+$statusColors = [
+    'oczekująca'   => 'var(--bs-warning)',
+    'potwierdzona' => 'var(--bs-info)',
+    'zrealizowana' => 'var(--bs-success)',
+    'anulowana'    => 'var(--bs-secondary)',
+];
+$maxStatus = 0;
+foreach ($byStatus as $statusRow) {
+    $maxStatus = max($maxStatus, (int) $statusRow['total']);
+}
+?>
+<div class="admin-section">
+    <h3>Statystyki</h3>
+
+    <div class="row g-3">
+        <div class="col-xl-8">
+            <h4 class="admin-stat-heading">Rezerwacje według statusu</h4>
+
+            <div class="admin-chart">
+                <?php foreach ($byStatus as $statusRow): ?>
+                    <?php
+                    $statusName = (string) $statusRow['status'];
+                    $statusTotal = (int) $statusRow['total'];
+                    $statusHeight = $maxStatus > 0 ? round($statusTotal / $maxStatus * 100, 1) : 0;
+                    $statusColor = $statusColors[$statusName] ?? 'var(--bs-secondary)';
+                    ?>
+                    <div class="admin-chart-item">
+                        <div class="admin-chart-track">
+                            <div class="admin-chart-bar"
+                                 style="height: <?= $statusHeight ?>%; background-color: <?= htmlspecialchars($statusColor, ENT_QUOTES, 'UTF-8') ?>">
+                                <span class="admin-chart-value"><?= $statusTotal ?></span>
+                            </div>
+                        </div>
+                        <span class="admin-chart-label"><?= htmlspecialchars($statusName, ENT_QUOTES, 'UTF-8') ?></span>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <div class="col-xl-4">
+            <h4 class="admin-stat-heading">Przychód</h4>
+            <div class="admin-stat-tile">
+                <p class="admin-stat-label mb-1">Przychód zrealizowanych</p>
+                <p class="admin-stat-value mb-0">
+                    <?= htmlspecialchars(number_format((float) $revenue, 2, ',', ' ') . ' zł', ENT_QUOTES, 'UTF-8') ?>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-lg-6">
+            <h4 class="admin-stat-heading">Najczęściej rezerwowane usługi (TOP 5)</h4>
+
+            <?php if ($topServices === []): ?>
+                <p class="admin-empty mb-0">Brak danych o rezerwacjach usług.</p>
+            <?php else: ?>
+                <div class="admin-table-wrap">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th scope="col">Usługa</th>
+                                <th scope="col" class="text-end">Rezerwacje</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($topServices as $serviceRow): ?>
+                                <tr>
+                                    <td data-label="Usługa"><?= htmlspecialchars((string) $serviceRow['name'], ENT_QUOTES, 'UTF-8') ?></td>
+                                    <td data-label="Rezerwacje" class="text-end"><?= (int) $serviceRow['total'] ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <div class="col-lg-6">
+            <h4 class="admin-stat-heading">Obłożenie pracowników (TOP 5)</h4>
+
+            <?php if ($workload === []): ?>
+                <p class="admin-empty mb-0">Brak danych o pracownikach.</p>
+            <?php else: ?>
+                <div class="admin-table-wrap">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th scope="col">Pracownik</th>
+                                <th scope="col" class="text-end">Rezerwacje</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($workload as $workloadRow): ?>
+                                <tr>
+                                    <td data-label="Pracownik"><?= htmlspecialchars((string) $workloadRow['employee_name'], ENT_QUOTES, 'UTF-8') ?></td>
+                                    <td data-label="Rezerwacje" class="text-end"><?= (int) $workloadRow['total'] ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>

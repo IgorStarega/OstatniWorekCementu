@@ -783,6 +783,99 @@ button:not(.btn):not(.navbar-toggler):active {
     border-color: rgba(148, 163, 184, 0.25);
 }
 
+.admin-stat-heading {
+    margin-bottom: 0.75rem;
+    color: var(--tekst-mut);
+    font-family: var(--font-display);
+    font-size: 0.76rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.admin-chart {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+    gap: 1rem;
+    min-height: 220px;
+    padding: 1.9rem 1rem 0.75rem;
+    background: #101316;
+    border: 1px solid #2f363e;
+    border-radius: 3px;
+}
+
+.admin-chart-item {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+}
+
+.admin-chart-track {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    width: 100%;
+    max-width: 74px;
+    height: 160px;
+    background: linear-gradient(to top, #191e23, #14181c);
+    border: 1px solid #242a31;
+    border-radius: 2px;
+}
+
+.admin-chart-bar {
+    position: relative;
+    width: 100%;
+    min-height: 2px;
+    border-radius: 2px 2px 0 0;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.admin-chart-value {
+    position: absolute;
+    top: -1.5rem;
+    left: 50%;
+    color: var(--tekst);
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    transform: translateX(-50%);
+}
+
+.admin-chart-label {
+    color: var(--tekst-mut);
+    font-family: var(--font-display);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.admin-stat-tile {
+    height: 100%;
+    padding: 1.25rem;
+    background: #101316;
+    border: 1px solid #2f363e;
+    border-left: 3px solid var(--akcent);
+    border-radius: 3px;
+}
+
+.admin-stat-label {
+    color: var(--tekst-mut);
+    font-family: var(--font-display);
+    font-size: 0.74rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.admin-stat-value {
+    color: var(--akcent);
+    font-family: var(--font-display);
+    font-size: 2rem;
+}
+
 /* --- Responsywność ------------------------------------------------------ */
 
 @media (max-width: 768px) {

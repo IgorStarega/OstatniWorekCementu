@@ -18,9 +18,13 @@ class AdminController
         $reservations = new Reservation($this->database());
 
         $this->render('dashboard', 'Dashboard', [
-            'counters' => $stats->counters(),
-            'upcoming' => $reservations->upcoming(5),
-            'flash'    => $this->takeFlash(),
+            'counters'    => $stats->counters(),
+            'upcoming'    => $reservations->upcoming(5),
+            'byStatus'    => $stats->byStatus(),
+            'revenue'     => $stats->revenueCompleted(),
+            'topServices' => $stats->topServices(5),
+            'workload'    => $stats->workload(),
+            'flash'       => $this->takeFlash(),
         ]);
     }
 
