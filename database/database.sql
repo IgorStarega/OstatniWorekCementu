@@ -16,7 +16,7 @@
 -- Wersja PHP: 8.3.26
 
 -- Plik odtwarza bazę od zera: tworzy bazę `budowlanka_rezerwacje`
--- i całą strukturę (10 tabel, klucze, indeksy). Bez danych testowych.
+-- i całą strukturę (13 tabel, klucze, indeksy). Bez danych testowych.
 CREATE DATABASE IF NOT EXISTS `budowlanka_rezerwacje`
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `budowlanka_rezerwacje`;
@@ -60,6 +60,19 @@ CREATE TABLE `employee_availability` (
   `day_of_week` tinyint NOT NULL,
   `start_time` time NOT NULL,
   `end_time` time NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Struktura tabeli dla tabeli `employee_days_off`
+--
+
+CREATE TABLE `employee_days_off` (
+  `id` int NOT NULL,
+  `employee_id` int NOT NULL,
+  `date` date NOT NULL,
+  `reason` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -243,6 +256,14 @@ ALTER TABLE `employee_availability`
   ADD UNIQUE KEY `uq_employee_day` (`employee_id`,`day_of_week`);
 
 --
+-- Indeksy dla tabeli `employee_days_off`
+--
+ALTER TABLE `employee_days_off`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_employee_date` (`employee_id`,`date`),
+  ADD KEY `date` (`date`);
+
+--
 -- Indeksy dla tabeli `employee_services`
 --
 ALTER TABLE `employee_services`
@@ -339,6 +360,12 @@ ALTER TABLE `employee_availability`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT dla tabeli `employee_days_off`
+--
+ALTER TABLE `employee_days_off`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT dla tabeli `reservations`
 --
 ALTER TABLE `reservations`
@@ -407,6 +434,12 @@ ALTER TABLE `employees`
 --
 ALTER TABLE `employee_availability`
   ADD CONSTRAINT `employee_availability_ibfk_1` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Ograniczenia dla tabeli `employee_days_off`
+--
+ALTER TABLE `employee_days_off`
+  ADD CONSTRAINT `employee_days_off_ibfk_1` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Ograniczenia dla tabeli `employee_services`

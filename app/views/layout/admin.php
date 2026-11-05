@@ -27,6 +27,11 @@ $adminModules = [
         'icon'  => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     ],
     [
+        'page'  => 'admin-days-off',
+        'label' => 'Dni wolne',
+        'icon'  => '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M9 15l2 2 4-4"/>',
+    ],
+    [
         'page'  => 'admin-users',
         'label' => 'Użytkownicy',
         'icon'  => '<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>',

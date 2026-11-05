@@ -59,4 +59,20 @@ class EmployeeAvailability
             'day_of_week' => $dayOfWeek,
         ]);
     }
+
+    // Czy pracownik jest niedostępny w danym dniu (urlop, dzień wolny)?
+    // Użyje tego proces rezerwacji w etapie 4.
+    public function isDayOff(int $employeeId, string $date): bool
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM employee_days_off
+             WHERE employee_id = :employee_id AND date = :date'
+        );
+        $statement->execute([
+            'employee_id' => $employeeId,
+            'date'        => $date,
+        ]);
+
+        return (int) $statement->fetchColumn() > 0;
+    }
 }

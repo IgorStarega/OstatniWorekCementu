@@ -599,6 +599,109 @@ class AdminController
         ]);
     }
 
+    // --- Dni wolne i urlopy ------------------------------------------------
+
+    public function daysOff(): void
+    {
+        requireRole('admin');
+
+        $employeesModel = new Employee($this->database());
+        $dayOffModel = new EmployeeDayOff($this->database());
+        $employees = $employeesModel->all();
+        $errors = [];
+        $formDate = '';
+        $formReason = '';
+
+        $selectedEmployeeId = $_SERVER['REQUEST_METHOD'] === 'POST'
+            ? $this->postId('employee_id')
+            : $this->getInt('employee_id');
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            csrf_verify(postString('csrf_token'));
+            $action = postString('action');
+
+            $employee = $selectedEmployeeId > 0 ? $employeesModel->find($selectedEmployeeId) : null;
+            if ($employee === null) {
+                $errors[] = 'Wybierz istniejącego pracownika.';
+            }
+
+            if ($action === 'add') {
+                $formDate = trim(postString('date'));
+                $formReason = trim(postString('reason'));
+
+                $dateObject = DateTime::createFromFormat('!Y-m-d', $formDate);
+                $dateErrors = DateTime::getLastErrors();
+                $validDate = $dateObject !== false
+                    && ($dateErrors === false
+                        || ($dateErrors['warning_count'] === 0 && $dateErrors['error_count'] === 0))
+                    && $dateObject->format('Y-m-d') === $formDate;
+
+                if (!$validDate) {
+                    $errors[] = 'Podaj poprawną datę w formacie RRRR-MM-DD.';
+                } elseif ($dateObject < new DateTime('today')) {
+                    $errors[] = 'Data dnia wolnego nie może być w przeszłości.';
+                }
+
+                if (mb_strlen($formReason) > 150) {
+                    $errors[] = 'Powód może mieć maksymalnie 150 znaków.';
+                }
+
+                if ($errors === []) {
+                    try {
+                        $dayOffModel->add($selectedEmployeeId, $formDate, $formReason);
+                        $this->flash('status', 'Dzień wolny został dodany.');
+                        $this->redirect('admin-days-off', ['employee_id' => $selectedEmployeeId]);
+                    } catch (PDOException $exception) {
+                        if ((string) $exception->getCode() === '23000') {
+                            $errors[] = 'Ten dzień jest już oznaczony jako wolny.';
+                        } else {
+                            error_log('Błąd zapisu dnia wolnego: ' . $exception->getMessage());
+                            $errors[] = 'Nie udało się zapisać dnia wolnego. Spróbuj ponownie.';
+                        }
+                    } catch (Throwable $exception) {
+                        error_log('Błąd zapisu dnia wolnego: ' . $exception->getMessage());
+                        $errors[] = 'Nie udało się zapisać dnia wolnego. Spróbuj ponownie.';
+                    }
+                }
+            } elseif ($action === 'delete') {
+                $id = $this->postId('id');
+
+                if ($id < 1) {
+                    $errors[] = 'Nie znaleziono dnia wolnego do usunięcia.';
+                } else {
+                    try {
+                        $dayOffModel->delete($id);
+                        $this->flash('status', 'Dzień wolny został usunięty.');
+                        $this->redirect('admin-days-off', ['employee_id' => $selectedEmployeeId]);
+                    } catch (Throwable $exception) {
+                        error_log('Błąd usuwania dnia wolnego: ' . $exception->getMessage());
+                        $errors[] = 'Nie udało się usunąć dnia wolnego. Spróbuj ponownie.';
+                    }
+                }
+            } else {
+                $errors[] = 'Nieznana akcja formularza.';
+            }
+        } else {
+            if ($selectedEmployeeId < 1 && $employees !== []) {
+                $selectedEmployeeId = (int) $employees[0]['id'];
+            }
+        }
+
+        $selectedEmployee = $selectedEmployeeId > 0 ? $employeesModel->find($selectedEmployeeId) : null;
+        $daysOff = $selectedEmployee !== null ? $dayOffModel->forEmployee($selectedEmployeeId) : [];
+
+        $this->render('days_off', 'Dni wolne', [
+            'employees'          => $employees,
+            'errors'             => $errors,
+            'flash'              => $this->takeFlash(),
+            'selectedEmployeeId' => $selectedEmployeeId,
+            'selectedEmployee'   => $selectedEmployee,
+            'daysOff'            => $daysOff,
+            'formDate'           => $formDate,
+            'formReason'         => $formReason,
+        ]);
+    }
+
     // --- Użytkownicy -------------------------------------------------------
 
     public function users(): void

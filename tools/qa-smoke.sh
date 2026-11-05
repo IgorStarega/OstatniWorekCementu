@@ -75,6 +75,8 @@ cleanup() {
          WHERE email = 'tomasz.zielinski@example.com'" >/dev/null 2>&1
     # Kategoria z testu XSS nie może zostać w bazie po przerwanym przebiegu.
     dbq "DELETE FROM service_categories WHERE name = '<script>alert(1)</script>'" >/dev/null 2>&1
+    # Test dni wolnych nie może zostawić wpisu blokującego kolejny przebieg.
+    dbq "DELETE FROM employee_days_off WHERE employee_id = 1 AND date = '2026-12-24'" >/dev/null 2>&1
     # Test zmiany roli przywraca konto Anny; własne konto admina zawsze aktywne.
     dbq "UPDATE users SET role = 'klient' WHERE email = 'anna.kowalska@example.com'" >/dev/null 2>&1
     dbq "UPDATE users SET is_active = 1 WHERE email = 'admin@ostatniworekcementu.pl'" >/dev/null 2>&1
@@ -321,13 +323,13 @@ fi
 # --- 18. Schemat bazy ----------------------------------------------------
 TABLES=$(dbq "SHOW TABLES" | grep -c .)
 COLS=$(dbq "SHOW COLUMNS FROM users" | cut -f1)
-if [ "$TABLES" = "12" ] \
+if [ "$TABLES" = "13" ] \
     && printf '%s\n' "$COLS" | grep -q '^failed_attempts$' \
     && printf '%s\n' "$COLS" | grep -q '^locked_until$' \
     && printf '%s\n' "$COLS" | grep -q '^email_verified_at$'; then
-    pass "18. Schemat: 12 tabel + kolumny users"
+    pass "18. Schemat: 13 tabel + kolumny users"
 else
-    fail "18. Schemat: 12 tabel + kolumny users" "tabele=$TABLES"
+    fail "18. Schemat: 13 tabel + kolumny users" "tabele=$TABLES"
 fi
 
 # --- 19. Migracje idempotentne (002, 003 i 004, dwa razy) ----------------
@@ -510,6 +512,33 @@ if [ "$code" = "200" ] && grep -q 'Poniedziałek' "$TMP/body" \
 else
     fail "26. admin-availability renders week table" "kod=$code"
 fi
+
+# --- 26b. Dni wolne: dodanie i blokada duplikatu -------------------------
+CSRF=$(get_csrf "$BASE_URL/?page=admin-days-off&employee_id=1" "$JAR_AVAIL")
+code=$(req POST "$BASE_URL/?page=admin-days-off" -b "$JAR_AVAIL" -c "$JAR_AVAIL" \
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "action=add" \
+    --data-urlencode "employee_id=1" --data-urlencode "date=2026-12-24" \
+    --data-urlencode "reason=Wigilia")
+ADDED=$(dbq "SELECT COUNT(*) FROM employee_days_off WHERE employee_id = 1 AND date = '2026-12-24'")
+if [ "${ADDED:-0}" -ge 1 ]; then
+    pass "26b. Dni wolne: dodanie działa"
+else
+    fail "26b. Dni wolne: dodanie działa" "kod=$code"
+fi
+
+CSRF=$(get_csrf "$BASE_URL/?page=admin-days-off&employee_id=1" "$JAR_AVAIL")
+code=$(req POST "$BASE_URL/?page=admin-days-off" -b "$JAR_AVAIL" -c "$JAR_AVAIL" \
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "action=add" \
+    --data-urlencode "employee_id=1" --data-urlencode "date=2026-12-24" \
+    --data-urlencode "reason=Wigilia")
+if [ "$code" = "200" ] && grep -q 'już oznaczony jako wolny' "$TMP/body" \
+   && ! grep -qE 'SQLSTATE|Fatal error|Uncaught' "$TMP/body"; then
+    pass "26c. Dni wolne: duplikat daty odrzucony komunikatem"
+else
+    fail "26c. Dni wolne: duplikat daty odrzucony komunikatem" "kod=$code"
+fi
+
+dbq "DELETE FROM employee_days_off WHERE employee_id = 1 AND date = '2026-12-24'" >/dev/null 2>&1
 
 # --- 27. Użytkownicy: lista i filtr --------------------------------------
 JAR_USR="$TMP/usr.txt"
