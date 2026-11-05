@@ -393,7 +393,7 @@ req POST "$BASE_URL/?page=login" -b "$JAR_ADMIN" -c "$JAR_ADMIN" >/dev/null \
 
 for admin_page in admin-dashboard admin-categories admin-services \
                   admin-employees admin-employee-services admin-availability \
-                  admin-users admin-reservations; do
+                  admin-days-off admin-users admin-reservations admin-log; do
     # Gość: 302 na logowanie.
     code=$(req GET "$BASE_URL/?page=$admin_page")
     if [ "$code" = "302" ] && grep -qi 'location:.*page=login' "$TMP/hdr"; then
@@ -764,6 +764,58 @@ fi
 # sprzątanie po teście logu
 dbq "DELETE FROM service_categories WHERE name = 'Log Test'" >/dev/null 2>&1
 dbq "DELETE FROM admin_log WHERE details LIKE '%Log Test%'" >/dev/null 2>&1
+
+# --- 39. Eksport CSV ------------------------------------------------------
+code=$(req GET "$BASE_URL/?page=admin-reservations-export" -b "$JAR_ADMIN" -c "$JAR_ADMIN")
+ctype=$(grep -i 'content-type' "$TMP/hdr" | head -1)
+if [ "$code" = "200" ] && printf '%s' "$ctype" | grep -qi 'csv'; then
+    pass "39. eksport CSV -> 200 + Content-Type text/csv"
+else
+    fail "39. eksport CSV" "kod=$code, ctype=$ctype"
+fi
+
+# --- 40. Dostępność: render tygodnia -------------------------------------
+code=$(req GET "$BASE_URL/?page=admin-availability&employee_id=1" -b "$JAR_ADMIN" -c "$JAR_ADMIN")
+if [ "$code" = "200" ] && grep -q 'Poniedziałek' "$TMP/body" \
+   && ! grep -qE 'Fatal error|Warning|Notice|Uncaught' "$TMP/body"; then
+    pass "40. admin-availability -> 200 z tabelą tygodnia"
+else
+    fail "40. admin-availability -> 200 z tabelą tygodnia" "kod=$code"
+fi
+
+# --- 41. Dni wolne: render ------------------------------------------------
+code=$(req GET "$BASE_URL/?page=admin-days-off&employee_id=1" -b "$JAR_ADMIN" -c "$JAR_ADMIN")
+if [ "$code" = "200" ] && ! grep -qE 'Fatal error|Warning|Notice|Uncaught' "$TMP/body"; then
+    pass "41. admin-days-off -> 200"
+else
+    fail "41. admin-days-off -> 200" "kod=$code"
+fi
+
+# --- 42. Log operacji: render ---------------------------------------------
+code=$(req GET "$BASE_URL/?page=admin-log" -b "$JAR_ADMIN" -c "$JAR_ADMIN")
+if [ "$code" = "200" ] && ! grep -qE 'Fatal error|Warning|Notice|Uncaught' "$TMP/body"; then
+    pass "42. admin-log -> 200"
+else
+    fail "42. admin-log -> 200" "kod=$code"
+fi
+
+# --- 43. Użytkownicy: filtr z wstrzyknięciem ------------------------------
+code=$(req GET "$BASE_URL/?page=admin-users&role=haker&active=abc&q=%3Cscript%3E" \
+    -b "$JAR_ADMIN" -c "$JAR_ADMIN")
+if [ "$code" = "200" ] && ! grep -qE 'Fatal error|SQLSTATE|Uncaught' "$TMP/body"; then
+    pass "43. admin-users: wstrzyknięte filtry zignorowane"
+else
+    fail "43. admin-users: wstrzyknięte filtry zignorowane" "kod=$code"
+fi
+
+# --- 44. Rezerwacje: filtr z wstrzyknięciem -------------------------------
+code=$(req GET "$BASE_URL/?page=admin-reservations&status=xss&employee_id=abc&date_from=2026-13-99" \
+    -b "$JAR_ADMIN" -c "$JAR_ADMIN")
+if [ "$code" = "200" ] && ! grep -qE 'Fatal error|SQLSTATE|Uncaught' "$TMP/body"; then
+    pass "44. admin-reservations: wstrzyknięte filtry zignorowane"
+else
+    fail "44. admin-reservations: wstrzyknięte filtry zignorowane" "kod=$code"
+fi
 
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------
 skip "Widok 500 przy błędnym DB_PASS" "wymaga restartu kontenera z innym DB_PASS (environment w compose); nie testujemy w tym przebiegu"
