@@ -34,6 +34,29 @@ Adres: <http://localhost:8082/>
 - [ ] **Wygląd** — industrialny ciemny motyw (grafit + żółty akcent) jest spójny na wszystkich
       stronach, a panel działa na 375 px.
 
+## Panel administratora — moduły podstawowe
+
+- [ ] **Dashboard** — kafelki pokazują aktualne liczby, sekcja statystyk ma wykres statusów,
+      przychód, TOP 5 usług i obłożenie pracowników; kliknięcie słupka filtruje rezerwacje.
+- [ ] **Użytkownicy** — lista, wyszukiwanie i filtry działają; zmiana roli oraz blokowanie
+      i odblokowanie konta pokazują komunikat, własnego konta nie da się zablokować.
+- [ ] **Rezerwacje** — lista i filtry (data, status, pracownik, szukanie) działają, szczegóły
+      pokazują dane klienta, zmianę statusu i historię zmian.
+
+## Panel administratora — moduły nowe
+
+- [ ] **Dostępność** — ustaw pon–pt 8:00–16:00 dla Jana Kowalskiego,
+      sprawdź w bazie 5 wierszy w `employee_availability`,
+      spróbuj ustawić odwrócone godziny (16:00–8:00) → komunikat walidacji.
+- [ ] **Dni wolne** — dodaj 24.12.2026 pracownikowi, spróbuj dodać drugi raz
+      ten sam dzień → komunikat o duplikacie, nie błąd SQL.
+- [ ] **Log operacji** — po zmianie statusu rezerwacji sprawdź, czy wpis
+      pojawił się na liście (autor, akcja, data).
+- [ ] **Eksport CSV** — pobierz plik, otwórz w Excelu/LibreOffice:
+      polskie znaki poprawne, separator `;`, brak `Ã³`.
+- [ ] **Paginacja** — jeśli lista ma >20 pozycji, przejdź na stronę 2,
+      sprawdź czy filtry się zachowały.
+
 ## Responsywność
 
 - [ ] **Telefon (≈375 px)** — brak poziomego przewijania, przyciski nie uciskają się,

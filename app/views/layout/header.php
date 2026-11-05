@@ -14,7 +14,7 @@ $isAdminPage = strpos($currentPage, 'admin-') === 0;
     <title><?= htmlspecialchars($pageTitle ?? 'System Rezerwacji') ?> — System Rezerwacji Usług Budowlanych</title>
     <link rel="stylesheet" href="/vendor/bootstrap/bootstrap.min.css">
     <link rel="stylesheet" href="/css/style.css">
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 </head>
 <body>
     <header class="site-header">
