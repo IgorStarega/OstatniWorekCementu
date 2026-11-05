@@ -15,6 +15,12 @@ $dayNames = [
         <h2>Dostępność</h2>
         <p class="text-muted mb-0">Godziny pracy pracownika w tygodniu. Dni numerowane od 1 (poniedziałek) do 7 (niedziela).</p>
     </div>
+    <?php if ($selectedEmployee !== null): ?>
+        <div class="admin-actions">
+            <a class="btn btn-outline-light btn-sm"
+               href="/?page=admin-days-off&amp;employee_id=<?= (int) $selectedEmployeeId ?>">Dni wolne</a>
+        </div>
+    <?php endif; ?>
 </div>
 
 <?php foreach ($errors as $error): ?>

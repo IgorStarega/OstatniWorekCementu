@@ -77,6 +77,7 @@ cleanup() {
     dbq "DELETE FROM service_categories WHERE name = '<script>alert(1)</script>'" >/dev/null 2>&1
     # Test dni wolnych nie może zostawić wpisu blokującego kolejny przebieg.
     dbq "DELETE FROM employee_days_off WHERE employee_id = 1 AND date = '2026-12-24'" >/dev/null 2>&1
+    dbq "DELETE FROM admin_log WHERE details LIKE '%2026-12-24%'" >/dev/null 2>&1
     # Test zmiany roli przywraca konto Anny; własne konto admina zawsze aktywne.
     dbq "UPDATE users SET role = 'klient' WHERE email = 'anna.kowalska@example.com'" >/dev/null 2>&1
     dbq "UPDATE users SET is_active = 1 WHERE email = 'admin@ostatniworekcementu.pl'" >/dev/null 2>&1
@@ -535,6 +536,10 @@ fi
 code=$(req GET "$BASE_URL/?page=admin-dashboard" -b "$JAR_DASH" -c "$JAR_DASH")
 if [ "$code" = "200" ] && grep -q 'Przychód' "$TMP/body" \
    && grep -q 'Najczęściej' "$TMP/body" \
+   && grep -q 'Wartość w toku' "$TMP/body" \
+   && grep -q 'W tym miesiącu' "$TMP/body" \
+   && grep -q 'Najbliższe dni wolne' "$TMP/body" \
+   && grep -q 'Ostatnie operacje' "$TMP/body" \
    && ! grep -qE 'Fatal error|Warning|Uncaught' "$TMP/body"; then
     pass "25b. dashboard renders statistics"
 else
@@ -582,7 +587,16 @@ else
     fail "26c. Dni wolne: duplikat daty odrzucony komunikatem" "kod=$code"
 fi
 
+DAYOFF_LOGGED=$(dbq "SELECT COUNT(*) FROM admin_log
+                     WHERE entity = 'employee' AND details LIKE '%2026-12-24%'")
+if [ "${DAYOFF_LOGGED:-0}" -ge 1 ]; then
+    pass "26d. Dni wolne trafiają do logu operacji"
+else
+    fail "26d. Dni wolne trafiają do logu operacji" "wpisów: ${DAYOFF_LOGGED:-0}"
+fi
+
 dbq "DELETE FROM employee_days_off WHERE employee_id = 1 AND date = '2026-12-24'" >/dev/null 2>&1
+dbq "DELETE FROM admin_log WHERE entity = 'employee' AND details LIKE '%2026-12-24%'" >/dev/null 2>&1
 
 # --- 27. Użytkownicy: lista i filtr --------------------------------------
 JAR_USR="$TMP/usr.txt"

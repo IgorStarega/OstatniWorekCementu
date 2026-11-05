@@ -13,6 +13,7 @@ $actionClasses = [
         <h2>Log operacji</h2>
         <p class="text-muted mb-0">Ostatnie 100 udanych operacji wykonanych w panelu administratora.</p>
     </div>
+    <a class="btn btn-outline-light btn-sm" href="/?page=admin-dashboard">Wróć do dashboardu</a>
 </div>
 
 <?php foreach ($errors ?? [] as $error): ?>
@@ -22,9 +23,12 @@ $actionClasses = [
 <div class="admin-section">
     <h3>Ostatnie operacje</h3>
 
-    <?php if ($entries === []): ?>
+    <?php if (empty($schemaReady)): ?>
+        <p class="admin-empty mb-0">Log operacji jest niedostępny, dopóki tabela <code>admin_log</code> nie zostanie utworzona.</p>
+    <?php elseif ($entries === []): ?>
         <p class="admin-empty mb-0">Brak zapisanych operacji.</p>
     <?php else: ?>
+        <p class="text-muted">Wyświetlono <?= count($entries) ?> najnowszych wpisów.</p>
         <div class="admin-table-wrap">
             <table class="table table-hover align-middle">
                 <thead>

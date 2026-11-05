@@ -66,6 +66,20 @@ $adminModules = [
     </aside>
 
     <section class="admin-content">
+        <?php if (!empty($schemaIssues)): ?>
+            <div class="admin-section admin-schema-warning" role="alert">
+                <h3>Baza wymaga aktualizacji</h3>
+                <p class="mb-2">
+                    Brakuje tabel: <strong><?= htmlspecialchars(implode(', ', $schemaIssues), ENT_QUOTES, 'UTF-8') ?></strong>.
+                    Część modułów panelu może być niedostępna.
+                </p>
+                <p class="mb-0">
+                    Uruchom w katalogu repozytorium:
+                    <code>bash tools/migrate.sh</code>
+                </p>
+            </div>
+        <?php endif; ?>
+
         <?php if (!empty($flash['message'])): ?>
             <p role="<?= htmlspecialchars($flash['type'], ENT_QUOTES, 'UTF-8') ?>" class="mb-3">
                 <?= htmlspecialchars($flash['message'], ENT_QUOTES, 'UTF-8') ?>

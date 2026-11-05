@@ -270,7 +270,10 @@ $returnSuffix = $returnQuery === ''
     <div class="admin-section">
         <h3>Historia zmian statusu</h3>
 
-        <?php if ($history === []): ?>
+        <?php if (empty($historyReady)): ?>
+            <p class="admin-empty mb-0">Historia jest niedostępna, dopóki tabela <code>status_history</code> nie zostanie utworzona.
+                Uruchom migrację 005.</p>
+        <?php elseif ($history === []): ?>
             <p class="admin-empty mb-0">Brak historii zmian.</p>
         <?php else: ?>
             <div class="admin-table-wrap">
