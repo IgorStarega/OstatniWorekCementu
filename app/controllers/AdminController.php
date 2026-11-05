@@ -713,13 +713,18 @@ class AdminController
                     $errors[] = 'Nie można usunąć dnia wolnego bez tabeli employee_days_off.';
                 } else {
                     try {
-                        $dayOffModel->delete($id);
-                        $this->recordAdminAction(
-                            currentUserId(), 'delete', 'employee', $selectedEmployeeId,
-                            'pracownik #' . $selectedEmployeeId . ': usunięto dzień wolny'
-                        );
-                        $this->flash('status', 'Dzień wolny został usunięty.');
-                        $this->redirect('admin-days-off', ['employee_id' => $selectedEmployeeId]);
+                        // Model dodatkowo sprawdza employee_id, więc nie można usunąć
+                        // dnia wolnego należącego do innego pracownika.
+                        if (!$dayOffModel->delete($id, $selectedEmployeeId)) {
+                            $errors[] = 'Nie znaleziono dnia wolnego dla wybranego pracownika.';
+                        } else {
+                            $this->recordAdminAction(
+                                currentUserId(), 'delete', 'employee', $selectedEmployeeId,
+                                'pracownik #' . $selectedEmployeeId . ': usunięto dzień wolny'
+                            );
+                            $this->flash('status', 'Dzień wolny został usunięty.');
+                            $this->redirect('admin-days-off', ['employee_id' => $selectedEmployeeId]);
+                        }
                     } catch (Throwable $exception) {
                         error_log('Błąd usuwania dnia wolnego: ' . $exception->getMessage());
                         $errors[] = 'Nie udało się usunąć dnia wolnego. Spróbuj ponownie.';
@@ -990,17 +995,17 @@ class AdminController
 
             fputcsv($out, [
                 (int) $row['id'],
-                $reservationDate !== false ? date('d.m.Y', $reservationDate) : (string) $row['reservation_date'],
-                substr((string) $row['start_time'], 0, 5),
-                substr((string) $row['end_time'], 0, 5),
-                (string) $row['client_name'],
-                (string) $row['client_email'],
-                (string) ($row['client_phone'] ?? ''),
-                (string) $row['employee_name'],
-                (string) $row['service_name'],
-                number_format((float) $row['final_price'], 2, ',', ''),
-                (string) $row['status'],
-                (string) ($row['comment'] ?? ''),
+                $reservationDate !== false ? date('d.m.Y', $reservationDate) : $this->csvSafeValue((string) $row['reservation_date']),
+                $this->csvSafeValue(substr((string) $row['start_time'], 0, 5)),
+                $this->csvSafeValue(substr((string) $row['end_time'], 0, 5)),
+                $this->csvSafeValue((string) $row['client_name']),
+                $this->csvSafeValue((string) $row['client_email']),
+                $this->csvSafeValue((string) ($row['client_phone'] ?? '')),
+                $this->csvSafeValue((string) $row['employee_name']),
+                $this->csvSafeValue((string) $row['service_name']),
+                $this->csvSafeValue(number_format((float) $row['final_price'], 2, ',', '')),
+                $this->csvSafeValue((string) $row['status']),
+                $this->csvSafeValue((string) ($row['comment'] ?? '')),
             ], ';');
         }
 
@@ -1024,6 +1029,18 @@ class AdminController
             'schemaReady' => $missing === [],
             'flash'       => $this->takeFlash(),
         ]);
+    }
+
+    // Ochrona eksportu CSV przed formula injection w Excelu/LibreOffice.
+    // Uwzględniamy również białe znaki i znaki sterujące przed formułą,
+    // ponieważ arkusze mogą je zignorować podczas interpretacji komórki.
+    private function csvSafeValue(string $value): string
+    {
+        if ($value !== '' && preg_match('/^[\\x00-\\x20]*[=+\\-@]/', $value) === 1) {
+            return "'" . $value;
+        }
+
+        return $value;
     }
 
     // --- Pomocnicze --------------------------------------------------------
