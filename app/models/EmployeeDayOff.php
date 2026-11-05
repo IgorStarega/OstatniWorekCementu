@@ -72,9 +72,19 @@ class EmployeeDayOff
         ]);
     }
 
-    public function delete(int $id): void
+    // Usuwa dzień wolny tylko wtedy, gdy należy do wybranego pracownika.
+    // employee_id jest sprawdzane również po stronie modelu, a nie tylko w kontrolerze.
+    public function delete(int $id, int $employeeId): bool
     {
-        $statement = $this->pdo->prepare('DELETE FROM employee_days_off WHERE id = :id');
-        $statement->execute(['id' => $id]);
+        $statement = $this->pdo->prepare(
+            'DELETE FROM employee_days_off
+             WHERE id = :id AND employee_id = :employee_id'
+        );
+        $statement->execute([
+            'id'          => $id,
+            'employee_id' => $employeeId,
+        ]);
+
+        return $statement->rowCount() > 0;
     }
 }
