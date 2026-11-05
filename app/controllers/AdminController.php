@@ -906,6 +906,56 @@ class AdminController
         ]);
     }
 
+    // --- Eksport rezerwacji ------------------------------------------------
+
+    public function exportReservations(): void
+    {
+        requireRole('admin');
+
+        $model = new Reservation($this->database());
+        $filters = $this->reservationFilters();
+        $reservations = $model->list($filters);
+
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="rezerwacje-' . date('Y-m-d') . '.csv"');
+
+        $out = fopen('php://output', 'w');
+        if ($out === false) {
+            exit;
+        }
+
+        // BOM — polski Excel poprawnie rozpoznaje UTF-8.
+        fwrite($out, "\xEF\xBB\xBF");
+
+        // Średnik jako separator — domyślny dla polskiego Excela.
+        fputcsv($out, [
+            'ID', 'Data', 'Godzina od', 'Godzina do', 'Klient', 'E-mail', 'Telefon',
+            'Pracownik', 'Usługa', 'Cena', 'Status', 'Komentarz',
+        ], ';');
+
+        foreach ($reservations as $row) {
+            $reservationDate = strtotime((string) $row['reservation_date']);
+
+            fputcsv($out, [
+                (int) $row['id'],
+                $reservationDate !== false ? date('d.m.Y', $reservationDate) : (string) $row['reservation_date'],
+                substr((string) $row['start_time'], 0, 5),
+                substr((string) $row['end_time'], 0, 5),
+                (string) $row['client_name'],
+                (string) $row['client_email'],
+                (string) ($row['client_phone'] ?? ''),
+                (string) $row['employee_name'],
+                (string) $row['service_name'],
+                number_format((float) $row['final_price'], 2, ',', ''),
+                (string) $row['status'],
+                (string) ($row['comment'] ?? ''),
+            ], ';');
+        }
+
+        fclose($out);
+        exit;
+    }
+
     // --- Log operacji ------------------------------------------------------
 
     public function log(): void

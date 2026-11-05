@@ -478,6 +478,17 @@ else
     fail "24d. Historia statusu zapisuje zmianę" "wpisów: ${HIST:-0}"
 fi
 
+# --- 24e. Eksport CSV zwraca plik ---------------------------------------
+code=$(req GET "$BASE_URL/?page=admin-reservations-export" -b "$JAR_RES" -c "$JAR_RES")
+if [ "$code" = "200" ] && grep -qi 'content-type: text/csv' "$TMP/hdr" \
+   && grep -q ';' "$TMP/body" \
+   && grep -q $'\xEF\xBB\xBF' "$TMP/body" \
+   && ! grep -qE 'Fatal error|Uncaught' "$TMP/body"; then
+    pass "24e. Eksport CSV"
+else
+    fail "24e. Eksport CSV" "kod=$code"
+fi
+
 # --- 25. Dashboard: kafelki z realnymi danymi ---------------------------
 JAR_DASH="$TMP/dash.txt"
 CSRF=$(get_csrf "$BASE_URL/?page=login" "$JAR_DASH")

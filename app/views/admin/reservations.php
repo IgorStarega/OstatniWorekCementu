@@ -33,6 +33,12 @@ $returnSuffix = $returnQuery === ''
             <h2>Rezerwacje</h2>
             <p class="text-muted mb-0">Terminy, statusy i obsługa zgłoszeń klientów.</p>
         </div>
+        <div class="admin-actions">
+            <a class="btn btn-outline-light btn-sm"
+               href="/?page=admin-reservations-export&amp;<?= htmlspecialchars(http_build_query($filters), ENT_QUOTES, 'UTF-8') ?>">
+                Eksport CSV
+            </a>
+        </div>
     </div>
 
     <?php foreach ($errors as $error): ?>

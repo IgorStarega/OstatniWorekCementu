@@ -163,6 +163,10 @@ switch ($page) {
         (new AdminController($config))->reservations();
         break;
 
+    case 'admin-reservations-export':
+        (new AdminController($config))->exportReservations();
+        break;
+
     case 'admin-log':
         (new AdminController($config))->log();
         break;
