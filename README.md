@@ -553,9 +553,10 @@ Podczas wdrażania aplikacji w środowisku produkcyjnym należy zadbać między 
 
 ### Etap 3 — panel administratora (wdrożone)
 
-* **Wspólny layout panelu:** sidebar z ośmioma modułami (Dashboard, Kategorie, Usługi,
-  Pracownicy, Przypisania usług, Dostępność, Użytkownicy, Rezerwacje), responsywna siatka
-  (poniżej 768 px sidebar przechodzi nad treść) i kontrola dostępu `requireRole('admin')`
+* **Wspólny layout panelu:** sidebar z dziewięcioma modułami (Dashboard, Kategorie, Usługi,
+  Pracownicy, Dostępność, Dni wolne, Użytkownicy, Rezerwacje, Log operacji). Moduł
+  **Przypisania usług** jest dostępny z poziomu zarządzania pracownikami, ale nie jest
+  osobną pozycją sidebaru. Layout jest responsywny (poniżej 768 px sidebar przechodzi nad treść), a kontrola dostępu `requireRole('admin')`
   w każdej metodzie `AdminController`.
 * **Dashboard z rzeczywistymi danymi:** liczniki klientów, pracowników, usług, wszystkich
   rezerwacji i rezerwacji na dziś oraz lista pięciu najbliższych rezerwacji bez anulowanych,
@@ -566,6 +567,8 @@ Podczas wdrażania aplikacji w środowisku produkcyjnym należy zadbać między 
   przełączana jednym przyciskiem; usługa z rezerwacjami nie zostanie usunięta.
 * **Pracownicy:** konto `users` (rola `pracownik`) i profil `employees` powstają w jednej
   transakcji PDO; duplikat e-maila jest odrzucany, a dezaktywacja blokuje logowanie.
+  Zmiana roli użytkownika synchronizuje profil `employees`, a blokowanie/odblokowanie
+  konta synchronizuje `users.is_active` z `employees.is_active`.
 * **Relacja N:M:** przypisywanie wielu usług do pracownika (`employee_services`) z walidacją
   ID po stronie serwera i zapisem w transakcji.
 * **Dostępność pracownika:** tygodniowe okna pracy w tabeli `employee_availability`;
@@ -606,7 +609,24 @@ Podczas wdrażania aplikacji w środowisku produkcyjnym należy zadbać między 
 
 * **Zamrożenie ceny w rezerwacji:** tabela `reservations` przechowuje `final_price` niezależnie od cennika — wdrożone.
 * **Wyszukiwanie i paginacja list administracyjnych:** wdrożone w etapie 3 (rezerwacje i użytkownicy).
-* **AJAX z terminami i historia zmian statusów:** zaplanowane — brak ich jeszcze w kodzie.
+* **AJAX z terminami:** pozostaje zaplanowane na późniejszy etap. **Historia zmian
+  statusów rezerwacji jest już wdrożona** w `status_history` i obsługiwana w panelu
+  administratora.
+
+---
+
+### Etap 3 — funkcje dodatkowe i zabezpieczenia
+
+| Funkcja | Status |
+|---|---|
+| Dni wolne i urlopy pracowników | wdrożone |
+| Historia zmian statusów rezerwacji | wdrożona |
+| Log operacji administratora | wdrożony |
+| Eksport rezerwacji do CSV | wdrożony |
+| Statystyki na dashboardzie | wdrożone |
+| Synchronizacja `users` ↔ `employees` przy zmianie roli i blokadzie konta | wdrożona |
+| Ochrona usuwania dnia wolnego przed zmianą pracownika | wdrożona |
+| Ochrona eksportu CSV przed formula injection | wdrożona |
 
 ---
 
