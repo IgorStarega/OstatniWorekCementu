@@ -125,6 +125,8 @@
                                        href="/?page=admin-employees&amp;edit=<?= (int) $employee['id'] ?>">Edytuj</a>
                                     <a class="btn btn-sm btn-outline-info"
                                        href="/?page=admin-employee-services&amp;employee_id=<?= (int) $employee['id'] ?>">Usługi</a>
+                                    <a class="btn btn-sm btn-outline-light"
+                                       href="/?page=admin-days-off&amp;employee_id=<?= (int) $employee['id'] ?>">Dni wolne</a>
 
                                     <form method="post" action="/?page=admin-employees">
                                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>">

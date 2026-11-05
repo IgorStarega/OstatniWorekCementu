@@ -97,6 +97,25 @@ class Reservation
         return $statement->fetchAll();
     }
 
+    // Ostatnie rezerwacje — używane na pulpicie, gdy nie ma nadchodzących.
+    public function recent(int $limit = 5): array
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT r.id, r.reservation_date, r.start_time, r.status,
+                    CONCAT(u.first_name, ' ', u.last_name) AS client_name,
+                    s.name AS service_name
+             FROM reservations r
+             JOIN users u    ON u.id = r.user_id
+             JOIN services s ON s.id = r.service_id
+             ORDER BY r.reservation_date DESC, r.start_time DESC, r.id DESC
+             LIMIT :limit"
+        );
+        $statement->bindValue(':limit', max(1, $limit), PDO::PARAM_INT);
+        $statement->execute();
+
+        return $statement->fetchAll();
+    }
+
     // Zmiana statusu z whitelistą wartości — walidacja należy do modelu,
     // bo sam kontroler nie może być jedyną barierą. SELECT ... FOR UPDATE
     // blokuje wiersz, więc dwa równoległe kliknięcia nie zapiszą sprzecznej historii.

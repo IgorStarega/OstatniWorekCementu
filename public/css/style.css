@@ -793,6 +793,18 @@ button:not(.btn):not(.navbar-toggler):active {
     text-transform: uppercase;
 }
 
+.admin-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.admin-stat-hint {
+    margin-top: 0.35rem;
+    color: var(--tekst-mut);
+    font-size: 0.78rem;
+}
+
 .admin-chart {
     display: flex;
     align-items: flex-end;
@@ -812,6 +824,17 @@ button:not(.btn):not(.navbar-toggler):active {
     align-items: center;
     gap: 0.6rem;
     min-width: 0;
+    padding: 0.35rem 0.25rem;
+    color: inherit;
+    border-radius: 3px;
+    text-decoration: none;
+}
+
+.admin-chart-item:hover,
+.admin-chart-item:focus {
+    color: inherit;
+    background: #171c21;
+    text-decoration: none;
 }
 
 .admin-chart-track {
@@ -853,6 +876,28 @@ button:not(.btn):not(.navbar-toggler):active {
     text-transform: uppercase;
 }
 
+.admin-chart-share {
+    color: var(--tekst-mut);
+    font-size: 0.68rem;
+}
+
+.admin-progress {
+    overflow: hidden;
+    height: 0.55rem;
+    background: #0b0d0f;
+    border: 1px solid #2f363e;
+    border-radius: 2px;
+}
+
+.admin-progress-bar {
+    height: 100%;
+    background: var(--akcent);
+}
+
+.admin-progress-cell {
+    width: 34%;
+}
+
 .admin-stat-tile {
     height: 100%;
     padding: 1.25rem;
@@ -876,7 +921,22 @@ button:not(.btn):not(.navbar-toggler):active {
     font-size: 2rem;
 }
 
+.admin-schema-warning {
+    border-left: 4px solid var(--bs-warning);
+    background: rgba(255, 193, 7, 0.06);
+}
+
+.admin-schema-warning h3::before {
+    background: var(--bs-warning);
+}
+
 /* --- Responsywność ------------------------------------------------------ */
+
+@media (max-width: 1200px) {
+    .admin-stat-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
 
 @media (max-width: 768px) {
     .admin-layout {
@@ -934,6 +994,20 @@ button:not(.btn):not(.navbar-toggler):active {
     .admin-actions {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .admin-stat-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-chart {
+        gap: 0.5rem;
+        padding-right: 0.5rem;
+        padding-left: 0.5rem;
+    }
+
+    .admin-progress-cell {
+        width: 42%;
     }
 
     .admin-table-wrap {

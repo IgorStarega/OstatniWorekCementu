@@ -39,6 +39,25 @@ class EmployeeDayOff
         return $statement->fetchAll();
     }
 
+    // Najbliższe dni wolne wszystkich pracowników — skrót na dashboardzie.
+    public function upcomingAll(int $limit = 5): array
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT d.id, d.date, d.reason,
+                    CONCAT(u.first_name, ' ', u.last_name) AS employee_name
+             FROM employee_days_off d
+             JOIN employees e ON e.id = d.employee_id
+             JOIN users u ON u.id = e.user_id
+             WHERE d.date >= CURDATE()
+             ORDER BY d.date ASC, u.last_name ASC, u.first_name ASC
+             LIMIT :limit"
+        );
+        $statement->bindValue(':limit', max(1, $limit), PDO::PARAM_INT);
+        $statement->execute();
+
+        return $statement->fetchAll();
+    }
+
     // Duplikat (employee_id, date) zgłasza PDOException o kodzie 23000.
     public function add(int $employeeId, string $date, string $reason): void
     {

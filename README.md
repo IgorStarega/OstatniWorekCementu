@@ -67,6 +67,11 @@ Aplikacja pozwala uporządkować proces obsługi klienta – od przedstawienia o
 * zarządzanie pracownikami,
 * zarządzanie rezerwacjami,
 * kontrolowanie dostępności usług,
+* dni wolne i urlopy pracowników,
+* statystyki i wykresy na dashboardzie,
+* historia zmian statusów rezerwacji,
+* log operacji administratora,
+* eksport rezerwacji do CSV,
 * administracja systemem.
 
 ---
@@ -104,7 +109,9 @@ Baza danych umożliwia między innymi przechowywanie:
 * listy usług budowlanych,
 * informacji o rezerwacjach,
 * terminów realizacji usług,
-* statusów zleceń,
+* statusów zleceń i historii ich zmian,
+* logu operacji administratora,
+* dni wolnych i urlopów pracowników,
 * dodatkowych informacji przekazanych przez klienta.
 
 Pliki związane z bazą danych znajdują się w katalogu: `database/`
@@ -120,6 +127,10 @@ Tabela `employee_availability` przechowuje tygodniowe okna pracy pracownika.
 Jeden wiersz na pracownika i dzień (`UNIQUE uq_employee_day`), `start_time` musi być
 ostro mniejsze niż `end_time`. Etap 4 (proces rezerwacji) wyznacza wolne terminy
 na podstawie tych okien i `services.duration_minutes`.
+
+Dni wolne i urlopy są przechowywane w `employee_days_off` (jeden wpis na pracownika
+i dzień, `UNIQUE uq_employee_date`) i obsługiwane w panelu administratora. Metoda
+`EmployeeAvailability::isDayOff()` jest gotowa dla procesu rezerwacji w etapie 4.
 
 ---
 
@@ -376,7 +387,16 @@ Skrypt `database/database.sql` jest importowany tylko przy **pustym** katalogu d
 (`data/mysql`). Jeśli baza już istnieje, nowe kolumny i tabele z etapu 2 trzeba dołożyć
 jedną z dwóch ścieżek:
 
-**(a) Zachowujemy dane** — stosujemy migracje po kolei (stos musi działać):
+**(a) Zachowujemy dane** — stosujemy migracje po kolei (stos musi działać).
+
+Najprościej jednym poleceniem:
+
+```bash
+bash tools/migrate.sh
+```
+
+Skrypt stosuje wszystkie pliki z `database/migrations/` w kolejności. Te same
+migracje można też uruchomić ręcznie:
 
 `docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < database/migrations/002-etap2.sql`
 
@@ -410,7 +430,7 @@ przy kolejnym uruchomieniu. `005` dodaje historię zmian statusów rezerwacji (`
 
 ## Testy
 
-Automatyczny smoke test (75 punktów kontrolnych: sesja, CSRF, rejestracja z linkiem,
+Automatyczny smoke test (76 punktów kontrolnych: sesja, CSRF, rejestracja z linkiem,
 weryfikacja, XSS, IDOR, trzy role, blokada konta, dostęp do panelu administratora,
 operacje destrukcyjne, paginacja i wyszukiwanie użytkowników, favicon, ochrona
 własnego konta, schemat bazy, migracje, kodowanie polskich znaków, retencja,
@@ -436,7 +456,7 @@ Wynik to `X/Y PASS`; kod wyjścia `1`, gdy cokolwiek padło. Rzeczy wymagające 
 bash tools/qa-smoke.sh
 ```
 
-Wynik: `75/75 PASS`, 0 FAIL, 2 SKIP. SKIP-y wymagają przeglądarki lub restartu
+Wynik: `76/76 PASS`, 0 FAIL, 2 SKIP. SKIP-y wymagają przeglądarki lub restartu
 kontenera — opisane poniżej.
 
 ### Manualnie — czego automat nie sprawdzi

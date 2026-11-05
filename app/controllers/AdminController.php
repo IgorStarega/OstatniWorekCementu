@@ -14,17 +14,30 @@ class AdminController
     {
         requireRole('admin');
 
-        $stats = new Stats($this->database());
-        $reservations = new Reservation($this->database());
+        $pdo = $this->database();
+        $stats = new Stats($pdo);
+        $reservations = new Reservation($pdo);
+
+        $missing = missingTables($pdo, ['admin_log', 'employee_days_off']);
+        $logReady = !in_array('admin_log', $missing, true);
+        $daysOffReady = !in_array('employee_days_off', $missing, true);
 
         $this->render('dashboard', 'Dashboard', [
-            'counters'    => $stats->counters(),
-            'upcoming'    => $reservations->upcoming(5),
-            'byStatus'    => $stats->byStatus(),
-            'revenue'     => $stats->revenueCompleted(),
-            'topServices' => $stats->topServices(5),
-            'workload'    => $stats->workload(),
-            'flash'       => $this->takeFlash(),
+            'counters'           => $stats->counters(),
+            'upcoming'           => $reservations->upcoming(5),
+            'recentReservations' => $reservations->recent(5),
+            'byStatus'           => $stats->byStatus(),
+            'revenue'            => $stats->revenueCompleted(),
+            'revenuePending'     => $stats->revenuePending(),
+            'averageCompleted'   => $stats->averageCompleted(),
+            'monthly'            => $stats->monthlyStats(),
+            'topServices'        => $stats->topServices(5),
+            'workload'           => $stats->workload(),
+            'recentLog'          => $logReady ? (new AdminLog($pdo))->recent(6) : [],
+            'upcomingDaysOff'    => $daysOffReady ? (new EmployeeDayOff($pdo))->upcomingAll(5) : [],
+            'logReady'           => $logReady,
+            'daysOffReady'       => $daysOffReady,
+            'flash'              => $this->takeFlash(),
         ]);
     }
 
@@ -56,7 +69,7 @@ class AdminController
                         $this->flash('alert', 'Nie można usunąć: kategoria ma ' . $servicesCount . ' usług.');
                     } else {
                         $categories->delete($id);
-                        (new AdminLog($this->database()))->record(
+                        $this->recordAdminAction(
                             currentUserId(), 'delete', 'category', $id,
                             'kategoria "' . (string) $category['name'] . '"'
                         );
@@ -83,14 +96,14 @@ class AdminController
                 if ($errors === []) {
                     if ($action === 'create') {
                         $newId = $categories->create($name, $description);
-                        (new AdminLog($this->database()))->record(
+                        $this->recordAdminAction(
                             currentUserId(), 'create', 'category', $newId,
                             'kategoria "' . $name . '"'
                         );
                         $this->flash('status', 'Kategoria została dodana.');
                     } else {
                         $categories->update($editingId, $name, $description);
-                        (new AdminLog($this->database()))->record(
+                        $this->recordAdminAction(
                             currentUserId(), 'update', 'category', $editingId,
                             'kategoria "' . $name . '"'
                         );
@@ -157,7 +170,7 @@ class AdminController
                         $this->flash('alert', 'Nie można usunąć: usługa ma ' . $reservationsCount . ' rezerwacji.');
                     } else {
                         $services->delete($id);
-                        (new AdminLog($this->database()))->record(
+                        $this->recordAdminAction(
                             currentUserId(), 'delete', 'service', $id, 'usługa #' . $id
                         );
                         $this->flash('status', 'Usługa została usunięta.');
@@ -173,7 +186,7 @@ class AdminController
                     $errors[] = 'Nie znaleziono usługi.';
                 } else {
                     $services->toggleActive($id);
-                    (new AdminLog($this->database()))->record(
+                    $this->recordAdminAction(
                         currentUserId(), 'update', 'service', $id, 'usługa #' . $id . ': zmieniono aktywność'
                     );
                     $this->flash('status', 'Aktywność usługi została zmieniona.');
@@ -214,13 +227,13 @@ class AdminController
 
                     if ($action === 'create') {
                         $newId = $services->create($data);
-                        (new AdminLog($this->database()))->record(
+                        $this->recordAdminAction(
                             currentUserId(), 'create', 'service', $newId, 'usługa #' . $newId
                         );
                         $this->flash('status', 'Usługa została dodana.');
                     } else {
                         $services->update($editingId, $data);
-                        (new AdminLog($this->database()))->record(
+                        $this->recordAdminAction(
                             currentUserId(), 'update', 'service', $editingId, 'usługa #' . $editingId
                         );
                         $this->flash('status', 'Usługa została zaktualizowana.');
@@ -294,7 +307,7 @@ class AdminController
                         $this->flash('alert', 'Nie można usunąć: pracownik ma ' . $reservationsCount . ' rezerwacji.');
                     } else {
                         $employees->delete($id);
-                        (new AdminLog($this->database()))->record(
+                        $this->recordAdminAction(
                             currentUserId(), 'delete', 'employee', $id, 'pracownik #' . $id
                         );
                         $this->flash('status', 'Pracownik został usunięty.');
@@ -310,7 +323,7 @@ class AdminController
                     $errors[] = 'Nie znaleziono pracownika.';
                 } else {
                     $employees->toggleActive($id);
-                    (new AdminLog($this->database()))->record(
+                    $this->recordAdminAction(
                         currentUserId(), 'update', 'employee', $id, 'pracownik #' . $id . ': zmieniono aktywność'
                     );
                     $this->flash('status', 'Aktywność pracownika została zmieniona.');
@@ -358,7 +371,7 @@ class AdminController
                                 'phone'      => $phone,
                                 'password'   => password_hash($password, PASSWORD_DEFAULT),
                             ], $description);
-                            (new AdminLog($this->database()))->record(
+                            $this->recordAdminAction(
                                 currentUserId(), 'create', 'employee', $newId, 'pracownik #' . $newId
                             );
                             $this->flash('status', 'Pracownik został dodany.');
@@ -369,7 +382,7 @@ class AdminController
                                 'email'      => $email,
                                 'phone'      => $phone,
                             ], $description);
-                            (new AdminLog($this->database()))->record(
+                            $this->recordAdminAction(
                                 currentUserId(), 'update', 'employee', $editingId, 'pracownik #' . $editingId
                             );
                             $this->flash('status', 'Dane pracownika zostały zaktualizowane.');
@@ -474,6 +487,10 @@ class AdminController
             if ($errors === []) {
                 try {
                     $assignments->syncForEmployee($selectedEmployeeId, $serviceIds);
+                    $this->recordAdminAction(
+                        currentUserId(), 'update', 'employee', $selectedEmployeeId,
+                        'pracownik #' . $selectedEmployeeId . ': przypisano ' . count($serviceIds) . ' usług'
+                    );
                     $this->flash('status', 'Przypisania usług zostały zapisane.');
                 } catch (Throwable $exception) {
                     error_log('Błąd zapisu przypisań usług: ' . $exception->getMessage());
@@ -552,6 +569,11 @@ class AdminController
                 if ($errors === []) {
                     try {
                         $availabilityModel->upsert($selectedEmployeeId, $formDay, $startTime, $endTime);
+                        $this->recordAdminAction(
+                            currentUserId(), 'update', 'employee', $selectedEmployeeId,
+                            'pracownik #' . $selectedEmployeeId . ': dostępność dzień ' . $formDay
+                                . ' ' . substr($startTime, 0, 5) . '–' . substr($endTime, 0, 5)
+                        );
                         $this->flash('status', 'Dostępność pracownika została zapisana.');
                         $this->redirect('admin-availability', ['employee_id' => $selectedEmployeeId]);
                     } catch (Throwable $exception) {
@@ -569,6 +591,10 @@ class AdminController
                 if ($errors === []) {
                     try {
                         $availabilityModel->delete($selectedEmployeeId, $formDay);
+                        $this->recordAdminAction(
+                            currentUserId(), 'delete', 'employee', $selectedEmployeeId,
+                            'pracownik #' . $selectedEmployeeId . ': usunięto dostępność dnia ' . $formDay
+                        );
                         $this->flash('status', 'Okno dostępności zostało usunięte.');
                         $this->redirect('admin-availability', ['employee_id' => $selectedEmployeeId]);
                     } catch (Throwable $exception) {
@@ -616,6 +642,12 @@ class AdminController
         $formDate = '';
         $formReason = '';
 
+        $missing = missingTables($this->database(), ['employee_days_off']);
+        $schemaReady = $missing === [];
+        if (!$schemaReady) {
+            $errors[] = missingTablesMessage($missing);
+        }
+
         $selectedEmployeeId = $_SERVER['REQUEST_METHOD'] === 'POST'
             ? $this->postId('employee_id')
             : $this->getInt('employee_id');
@@ -653,6 +685,10 @@ class AdminController
                 if ($errors === []) {
                     try {
                         $dayOffModel->add($selectedEmployeeId, $formDate, $formReason);
+                        $this->recordAdminAction(
+                            currentUserId(), 'update', 'employee', $selectedEmployeeId,
+                            'pracownik #' . $selectedEmployeeId . ': dzień wolny ' . $formDate
+                        );
                         $this->flash('status', 'Dzień wolny został dodany.');
                         $this->redirect('admin-days-off', ['employee_id' => $selectedEmployeeId]);
                     } catch (PDOException $exception) {
@@ -672,9 +708,16 @@ class AdminController
 
                 if ($id < 1) {
                     $errors[] = 'Nie znaleziono dnia wolnego do usunięcia.';
+                } elseif (!$schemaReady) {
+                    // Komunikat o brakującej tabeli został już dodany wyżej.
+                    $errors[] = 'Nie można usunąć dnia wolnego bez tabeli employee_days_off.';
                 } else {
                     try {
                         $dayOffModel->delete($id);
+                        $this->recordAdminAction(
+                            currentUserId(), 'delete', 'employee', $selectedEmployeeId,
+                            'pracownik #' . $selectedEmployeeId . ': usunięto dzień wolny'
+                        );
                         $this->flash('status', 'Dzień wolny został usunięty.');
                         $this->redirect('admin-days-off', ['employee_id' => $selectedEmployeeId]);
                     } catch (Throwable $exception) {
@@ -692,12 +735,15 @@ class AdminController
         }
 
         $selectedEmployee = $selectedEmployeeId > 0 ? $employeesModel->find($selectedEmployeeId) : null;
-        $daysOff = $selectedEmployee !== null ? $dayOffModel->forEmployee($selectedEmployeeId) : [];
+        $daysOff = $selectedEmployee !== null && $schemaReady
+            ? $dayOffModel->forEmployee($selectedEmployeeId)
+            : [];
 
         $this->render('days_off', 'Dni wolne', [
             'employees'          => $employees,
             'errors'             => $errors,
             'flash'              => $this->takeFlash(),
+            'schemaReady'        => $schemaReady,
             'selectedEmployeeId' => $selectedEmployeeId,
             'selectedEmployee'   => $selectedEmployee,
             'daysOff'            => $daysOff,
@@ -763,7 +809,7 @@ class AdminController
                 if (!in_array($newRole, User::ROLES, true)) {
                     $this->flash('alert', 'Nieprawidłowa rola użytkownika.');
                 } elseif ($usersModel->updateRole($id, $newRole)) {
-                    (new AdminLog($this->database()))->record(
+                    $this->recordAdminAction(
                         currentUserId(), 'update', 'user', $id,
                         'użytkownik #' . $id . ': rola ' . (string) $target['role'] . ' → ' . $newRole
                     );
@@ -778,7 +824,7 @@ class AdminController
             if ($action === 'toggle') {
                 $isActive = (int) $target['is_active'] === 1;
                 $usersModel->setActive($id, !$isActive);
-                (new AdminLog($this->database()))->record(
+                $this->recordAdminAction(
                     currentUserId(), 'update', 'user', $id,
                     'użytkownik #' . $id . ($isActive ? ': konto zablokowane' : ': konto odblokowane')
                 );
@@ -822,6 +868,9 @@ class AdminController
         $errors = [];
         $filters = $this->reservationFilters();
 
+        $missingHistory = missingTables($this->database(), ['status_history']);
+        $historyReady = $missingHistory === [];
+
         // Numer strony trzymamy w parametrze p — samo "page" należy do routingu.
         $currentPage = max(
             1,
@@ -851,13 +900,15 @@ class AdminController
 
                 if ($reservationRecord === null) {
                     $this->flash('alert', 'Nie znaleziono rezerwacji.');
+                } elseif (!$historyReady) {
+                    $this->flash('alert', missingTablesMessage($missingHistory));
                 } elseif (!$model->updateStatus($id, $newStatus, currentUserId())) {
                     $this->flash('alert', 'Nieprawidłowy status.');
                 } else {
                     $oldStatus = (string) $reservationRecord['status'];
 
                     if ($oldStatus !== $newStatus) {
-                        (new AdminLog($this->database()))->record(
+                        $this->recordAdminAction(
                             currentUserId(), 'status', 'reservation', $id,
                             'status: ' . $oldStatus . ' → ' . $newStatus
                         );
@@ -898,9 +949,10 @@ class AdminController
             'pagination'   => $pagination,
             'employees'    => $employeesModel->all(),
             'statuses'     => Reservation::STATUSES,
-            'history'      => $reservation === null
-                ? []
-                : (new StatusHistory($this->database()))->forReservation((int) $reservation['id']),
+            'historyReady' => $historyReady,
+            'history'      => $reservation !== null && $historyReady
+                ? (new StatusHistory($this->database()))->forReservation((int) $reservation['id'])
+                : [],
             'errors'       => $errors,
             'flash'        => $this->takeFlash(),
         ]);
@@ -962,11 +1014,15 @@ class AdminController
     {
         requireRole('admin');
 
-        $log = new AdminLog($this->database());
+        $missing = missingTables($this->database(), ['admin_log']);
+        $entries = $missing === [] ? (new AdminLog($this->database()))->recent(100) : [];
+        $errors = $missing === [] ? [] : [missingTablesMessage($missing)];
 
         $this->render('log', 'Log operacji', [
-            'entries' => $log->recent(100),
-            'flash'   => $this->takeFlash(),
+            'entries'     => $entries,
+            'errors'      => $errors,
+            'schemaReady' => $missing === [],
+            'flash'       => $this->takeFlash(),
         ]);
     }
 
@@ -977,12 +1033,34 @@ class AdminController
         return Database::connect($this->config['db']);
     }
 
+    // Log nie może wywalać operacji, gdy na starszej bazie brakuje tabeli.
+    private function recordAdminAction(
+        ?int $userId,
+        string $action,
+        string $entity,
+        ?int $entityId,
+        string $details = ''
+    ): void {
+        try {
+            if (missingTables($this->database(), ['admin_log']) !== []) {
+                return;
+            }
+
+            (new AdminLog($this->database()))->record($userId, $action, $entity, $entityId, $details);
+        } catch (Throwable $exception) {
+            error_log('Nie udało się zapisać logu administratora: ' . $exception->getMessage());
+        }
+    }
+
     // Renderuje widok modułu w ramce layoutu administratora.
     private function render(string $view, string $title, array $data = []): void
     {
         if (!preg_match('/^[a-z_]+$/', $view)) {
             throw new RuntimeException('Nieprawidłowa nazwa widoku administracyjnego.');
         }
+
+        // Wspólny warning w layoucie: nowe moduły wymagają migracji 005–007.
+        $schemaIssues = missingTables($this->database(), ['status_history', 'admin_log', 'employee_days_off']);
 
         $pageTitle = $title;
         $pageClass = 'admin-main';

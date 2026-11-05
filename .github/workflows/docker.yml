@@ -54,7 +54,10 @@ jobs:
         run: node --check public/js/script.js
 
       - name: Walidacja składni skryptów bash
-        run: bash -n tools/qa-smoke.sh
+        run: |
+          for script in tools/*.sh; do
+            bash -n "$script"
+          done
 
       - name: Walidacja konfiguracji Compose
         run: |

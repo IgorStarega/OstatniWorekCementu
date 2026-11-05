@@ -17,26 +17,29 @@ class Stats
                 (SELECT COUNT(*) FROM employees WHERE is_active = 1)                    AS employees,
                 (SELECT COUNT(*) FROM services WHERE is_active = 1)                     AS services,
                 (SELECT COUNT(*) FROM reservations)                                     AS reservations_total,
+                (SELECT COUNT(*) FROM reservations WHERE status = 'oczekująca')          AS reservations_pending,
                 (SELECT COUNT(*) FROM reservations WHERE reservation_date = CURDATE())   AS reservations_today"
         )->fetch();
 
         if (!is_array($row)) {
             return [
-                'clients'            => 0,
-                'employees'          => 0,
-                'services'           => 0,
-                'reservations_total' => 0,
-                'reservations_today' => 0,
+                'clients'              => 0,
+                'employees'            => 0,
+                'services'             => 0,
+                'reservations_total'   => 0,
+                'reservations_pending' => 0,
+                'reservations_today'   => 0,
             ];
         }
 
         // PDO z MySQL zwraca liczby jako stringi — ujednolicamy typy.
         return [
-            'clients'            => (int) $row['clients'],
-            'employees'          => (int) $row['employees'],
-            'services'           => (int) $row['services'],
-            'reservations_total' => (int) $row['reservations_total'],
-            'reservations_today' => (int) $row['reservations_today'],
+            'clients'              => (int) $row['clients'],
+            'employees'            => (int) $row['employees'],
+            'services'             => (int) $row['services'],
+            'reservations_total'   => (int) $row['reservations_total'],
+            'reservations_pending' => (int) $row['reservations_pending'],
+            'reservations_today'   => (int) $row['reservations_today'],
         ];
     }
 
@@ -44,9 +47,10 @@ class Stats
     public function byStatus(): array
     {
         $statement = $this->pdo->query(
-            'SELECT status, COUNT(*) AS total
+            "SELECT status, COUNT(*) AS total
              FROM reservations
-             GROUP BY status'
+             GROUP BY status
+             ORDER BY FIELD(status, 'oczekująca', 'potwierdzona', 'zrealizowana', 'anulowana')"
         );
 
         $counts = [];
@@ -73,6 +77,47 @@ class Stats
              FROM reservations
              WHERE status = 'zrealizowana'"
         )->fetchColumn();
+    }
+
+    // Wartość rezerwacji, które są jeszcze w toku (oczekujące + potwierdzone).
+    public function revenuePending(): float
+    {
+        return (float) $this->pdo->query(
+            "SELECT COALESCE(SUM(final_price), 0)
+             FROM reservations
+             WHERE status IN ('oczekująca', 'potwierdzona')"
+        )->fetchColumn();
+    }
+
+    // Średnia wartość zrealizowanej rezerwacji.
+    public function averageCompleted(): float
+    {
+        return (float) $this->pdo->query(
+            "SELECT COALESCE(AVG(final_price), 0)
+             FROM reservations
+             WHERE status = 'zrealizowana'"
+        )->fetchColumn();
+    }
+
+    // Rezerwacje utworzone w bieżącym miesiącu i przychód zrealizowanych z tego okresu.
+    public function monthlyStats(): array
+    {
+        $row = $this->pdo->query(
+            "SELECT COUNT(*) AS reservations,
+                    COALESCE(SUM(CASE WHEN status = 'zrealizowana' THEN final_price ELSE 0 END), 0) AS revenue
+             FROM reservations
+             WHERE created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+               AND created_at < DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)"
+        )->fetch();
+
+        if (!is_array($row)) {
+            return ['reservations' => 0, 'revenue' => 0.0];
+        }
+
+        return [
+            'reservations' => (int) $row['reservations'],
+            'revenue'      => (float) $row['revenue'],
+        ];
     }
 
     // TOP najczęściej rezerwowanych usług.

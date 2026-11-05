@@ -7,6 +7,14 @@ $today = date('Y-m-d');
         <h2>Dni wolne</h2>
         <p class="text-muted mb-0">Urlopy i jednorazowe dni wolne pracowników. Jeden wpis na dzień.</p>
     </div>
+    <?php if ($selectedEmployee !== null): ?>
+        <div class="admin-actions">
+            <a class="btn btn-outline-light btn-sm"
+               href="/?page=admin-availability&amp;employee_id=<?= (int) $selectedEmployeeId ?>">Dostępność tygodnia</a>
+            <a class="btn btn-outline-light btn-sm"
+               href="/?page=admin-employees">Pracownicy</a>
+        </div>
+    <?php endif; ?>
 </div>
 
 <?php foreach ($errors as $error): ?>
@@ -99,6 +107,9 @@ $today = date('Y-m-d');
         <div class="admin-section">
             <h3>Dodaj dzień wolny</h3>
 
+            <?php if (!$schemaReady): ?>
+                <p class="admin-empty mb-0">Dodawanie dni wolnych jest niedostępne do czasu uruchomienia migracji 007.</p>
+            <?php else: ?>
             <form method="post" action="/?page=admin-days-off" class="admin-form">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="action" value="add">
@@ -121,6 +132,7 @@ $today = date('Y-m-d');
 
                 <button type="submit" class="btn btn-primary mt-3">Dodaj dzień wolny</button>
             </form>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 <?php endif; ?>
