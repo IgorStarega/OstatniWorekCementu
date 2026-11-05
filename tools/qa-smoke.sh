@@ -96,6 +96,20 @@ if [ "$(dbq "SHOW TABLES LIKE 'users'")" != "users" ]; then
     exit 2
 fi
 
+# Baza bez migracji 005–007 nie przejdzie testów nowych modułów — lepiej
+# zatrzymać się od razu z czytelnym komunikatem niż dostać serię FAIL.
+MISSING_TABLES=""
+for table in status_history admin_log employee_days_off; do
+    if [ "$(dbq "SHOW TABLES LIKE '$table'")" != "$table" ]; then
+        MISSING_TABLES="$MISSING_TABLES $table"
+    fi
+done
+
+if [ -n "$MISSING_TABLES" ]; then
+    echo "BŁĄD: baza nie ma migracji 005–007 (brak tabel:$MISSING_TABLES). Uruchom migracje z database/migrations/." >&2
+    exit 1
+fi
+
 if ! curl -fsS -o /dev/null "$BASE_URL/?page=home" 2>/dev/null; then
     echo "BŁĄD: aplikacja nie odpowiada pod $BASE_URL. Uruchom: docker compose up -d" >&2
     exit 2
@@ -339,23 +353,25 @@ for t in status_history admin_log employee_days_off; do
     fi
 done
 
-# --- 19. Migracje idempotentne (002, 003 i 004, dwa razy) ----------------
+# --- 19. Migracje idempotentne (002–007, dwa razy) -----------------------
 MIG_OUT="$TMP/mig.txt"
 for _ in 1 2; do
-    docker compose exec -T "$DB_SERVICE" sh -c \
-        'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
-        < database/migrations/002-etap2.sql >>"$MIG_OUT" 2>&1
-    docker compose exec -T "$DB_SERVICE" sh -c \
-        'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
-        < database/migrations/003-etap2.sql >>"$MIG_OUT" 2>&1
-    docker compose exec -T "$DB_SERVICE" sh -c \
-        'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
-        < database/migrations/004-poprawka-kodowania.sql >>"$MIG_OUT" 2>&1
+    for migration in \
+        002-etap2.sql \
+        003-etap2.sql \
+        004-poprawka-kodowania.sql \
+        005-historia-statusow.sql \
+        006-log-administratora.sql \
+        007-dni-wolne.sql; do
+        docker compose exec -T "$DB_SERVICE" sh -c \
+            'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
+            < "database/migrations/$migration" >>"$MIG_OUT" 2>&1
+    done
 done
 if ! grep -qi 'ERROR' "$MIG_OUT"; then
-    pass "19. Migracje 002, 003 i 004 idempotentne (dwa przebiegi)"
+    pass "19. Migracje 002–007 idempotentne (dwa przebiegi)"
 else
-    fail "19. Migracje 002, 003 i 004 idempotentne (dwa przebiegi)" "$(grep -i 'ERROR' "$MIG_OUT" | head -1)"
+    fail "19. Migracje 002–007 idempotentne (dwa przebiegi)" "$(grep -i 'ERROR' "$MIG_OUT" | head -1)"
 fi
 
 # --- 20. Retencja email_sends -------------------------------------------
