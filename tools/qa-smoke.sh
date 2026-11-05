@@ -321,13 +321,13 @@ fi
 # --- 18. Schemat bazy ----------------------------------------------------
 TABLES=$(dbq "SHOW TABLES" | grep -c .)
 COLS=$(dbq "SHOW COLUMNS FROM users" | cut -f1)
-if [ "$TABLES" = "10" ] \
+if [ "$TABLES" = "11" ] \
     && printf '%s\n' "$COLS" | grep -q '^failed_attempts$' \
     && printf '%s\n' "$COLS" | grep -q '^locked_until$' \
     && printf '%s\n' "$COLS" | grep -q '^email_verified_at$'; then
-    pass "18. Schemat: 10 tabel + kolumny users"
+    pass "18. Schemat: 11 tabel + kolumny users"
 else
-    fail "18. Schemat: 10 tabel + kolumny users" "tabele=$TABLES"
+    fail "18. Schemat: 11 tabel + kolumny users" "tabele=$TABLES"
 fi
 
 # --- 19. Migracje idempotentne (002, 003 i 004, dwa razy) ----------------
@@ -461,6 +461,19 @@ if [ "$code" = "302" ]; then
     pass "24c. Rezerwacje: zmiana statusu -> 302"
 else
     fail "24c. Rezerwacje: zmiana statusu -> 302" "kod=$code"
+fi
+
+# --- 24d. Historia statusu zapisuje zmianę ------------------------------
+CSRF=$(get_csrf "$BASE_URL/?page=admin-reservations&id=1" "$JAR_RES")
+req POST "$BASE_URL/?page=admin-reservations" -b "$JAR_RES" -c "$JAR_RES" >/dev/null \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "action=status" --data-urlencode "id=1" \
+    --data-urlencode "status=zrealizowana"
+HIST=$(dbq "SELECT COUNT(*) FROM status_history WHERE reservation_id = 1 AND new_status = 'zrealizowana'")
+if [ "${HIST:-0}" -ge 1 ]; then
+    pass "24d. Historia statusu zapisuje zmianę"
+else
+    fail "24d. Historia statusu zapisuje zmianę" "wpisów: ${HIST:-0}"
 fi
 
 # --- 25. Dashboard: kafelki z realnymi danymi ---------------------------

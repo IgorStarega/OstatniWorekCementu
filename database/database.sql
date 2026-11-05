@@ -96,6 +96,21 @@ CREATE TABLE `reservations` (
 -- --------------------------------------------------------
 
 --
+-- Struktura tabeli dla tabeli `status_history`
+--
+
+CREATE TABLE `status_history` (
+  `id` int NOT NULL,
+  `reservation_id` int NOT NULL,
+  `old_status` enum('oczekująca','potwierdzona','zrealizowana','anulowana') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `new_status` enum('oczekująca','potwierdzona','zrealizowana','anulowana') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `changed_by` int DEFAULT NULL,
+  `changed_at` datetime DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Struktura tabeli dla tabeli `services`
 --
 
@@ -231,6 +246,15 @@ ALTER TABLE `reservations`
   ADD UNIQUE KEY `uq_employee_slot` (`employee_id`,`reservation_date`,`start_time`);
 
 --
+-- Indeksy dla tabeli `status_history`
+--
+ALTER TABLE `status_history`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `reservation_id` (`reservation_id`),
+  ADD KEY `changed_by` (`changed_by`),
+  ADD KEY `changed_at` (`changed_at`);
+
+--
 -- Indeksy dla tabeli `services`
 --
 ALTER TABLE `services`
@@ -293,6 +317,12 @@ ALTER TABLE `employee_availability`
 -- AUTO_INCREMENT dla tabeli `reservations`
 --
 ALTER TABLE `reservations`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT dla tabeli `status_history`
+--
+ALTER TABLE `status_history`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
@@ -363,6 +393,13 @@ ALTER TABLE `reservations`
   ADD CONSTRAINT `reservations_ibfk_3` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 --
+-- Ograniczenia dla tabeli `status_history`
+--
+ALTER TABLE `status_history`
+  ADD CONSTRAINT `status_history_ibfk_1` FOREIGN KEY (`reservation_id`) REFERENCES `reservations` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `status_history_ibfk_2` FOREIGN KEY (`changed_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+--
 -- Ograniczenia dla tabeli `services`
 --
 ALTER TABLE `services`
@@ -383,8 +420,9 @@ COMMIT;
 -- OSTATNI WOREK CEMENTU
 -- =========================================
 
--- Struktura powyżej przywraca character_set_client z połączenia, dlatego przed
--- danymi ponownie ustawiamy utf8mb4 — inaczej polskie znaki byłyby podwójnie kodowane.
+-- Plik jest zwykle doklejany po strukturze, która na końcu przywraca
+-- character_set_client z połączenia (zwykle latin1). Bez tej linii polskie
+-- znaki zapisałyby się podwójnie zakodowane.
 SET NAMES utf8mb4;
 
 -- KATEGORIE USŁUG
@@ -724,3 +762,15 @@ VALUES
  'oczekująca',
  'Ocieplenie budynku jednorodzinnego.'
 );
+
+
+-- =========================================
+-- HISTORIA STATUSÓW REZERWACJI
+-- Pierwszy wpis każdej rezerwacji: old_status = NULL (utworzenie),
+-- autor = administrator (id 7), data = created_at rezerwacji.
+-- =========================================
+
+INSERT INTO status_history
+(reservation_id, old_status, new_status, changed_by, changed_at)
+SELECT id, NULL, status, 7, created_at
+FROM reservations;

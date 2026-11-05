@@ -31,6 +31,7 @@ require BASE_PATH . '/app/models/Service.php';
 require BASE_PATH . '/app/models/Employee.php';
 require BASE_PATH . '/app/models/EmployeeService.php';
 require BASE_PATH . '/app/models/EmployeeAvailability.php';
+require BASE_PATH . '/app/models/StatusHistory.php';
 require BASE_PATH . '/app/models/Reservation.php';
 require BASE_PATH . '/app/models/Stats.php';
 require BASE_PATH . '/app/controllers/HomeController.php';

@@ -260,4 +260,65 @@ $returnSuffix = $returnQuery === ''
             </div>
         </form>
     </div>
+
+    <div class="admin-section">
+        <h3>Historia zmian statusu</h3>
+
+        <?php if ($history === []): ?>
+            <p class="admin-empty mb-0">Brak historii zmian.</p>
+        <?php else: ?>
+            <div class="admin-table-wrap">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th scope="col">Data i godzina</th>
+                            <th scope="col">Z</th>
+                            <th scope="col">Na</th>
+                            <th scope="col">Autor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($history as $entry): ?>
+                            <?php
+                            $oldStatus = $entry['old_status'] !== null ? (string) $entry['old_status'] : null;
+                            $newStatus = (string) $entry['new_status'];
+                            $newStatusClass = $statusClasses[$newStatus] ?? 'text-bg-secondary';
+                            $changedAt = strtotime((string) $entry['changed_at']);
+                            ?>
+                            <tr>
+                                <td data-label="Data i godzina">
+                                    <?= $changedAt !== false
+                                        ? htmlspecialchars(date('d.m.Y H:i', $changedAt), ENT_QUOTES, 'UTF-8')
+                                        : '—' ?>
+                                </td>
+                                <td data-label="Z">
+                                    <?php if ($oldStatus === null): ?>
+                                        <span class="text-muted">—</span>
+                                    <?php else: ?>
+                                        <span class="badge <?= htmlspecialchars($statusClasses[$oldStatus] ?? 'text-bg-secondary', ENT_QUOTES, 'UTF-8') ?>">
+                                            <?= htmlspecialchars($oldStatus, ENT_QUOTES, 'UTF-8') ?>
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
+                                <td data-label="Na">
+                                    <span class="badge <?= htmlspecialchars($newStatusClass, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= htmlspecialchars($newStatus, ENT_QUOTES, 'UTF-8') ?>
+                                    </span>
+                                </td>
+                                <td data-label="Autor">
+                                    <?= htmlspecialchars(
+                                        $entry['changed_by_name'] !== null
+                                            ? (string) $entry['changed_by_name']
+                                            : 'system',
+                                        ENT_QUOTES,
+                                        'UTF-8'
+                                    ) ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
 <?php endif; ?>

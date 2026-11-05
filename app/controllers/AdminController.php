@@ -699,7 +699,7 @@ class AdminController
 
                 if ($id < 1 || $model->find($id) === null) {
                     $this->flash('alert', 'Nie znaleziono rezerwacji.');
-                } elseif (!$model->updateStatus($id, $newStatus)) {
+                } elseif (!$model->updateStatus($id, $newStatus, currentUserId())) {
                     $this->flash('alert', 'Nieprawidłowy status.');
                 } else {
                     $this->flash('status', 'Status rezerwacji został zmieniony.');
@@ -732,6 +732,9 @@ class AdminController
             'pagination'   => $pagination,
             'employees'    => $employeesModel->all(),
             'statuses'     => Reservation::STATUSES,
+            'history'      => $reservation === null
+                ? []
+                : (new StatusHistory($this->database()))->forReservation((int) $reservation['id']),
             'errors'       => $errors,
             'flash'        => $this->takeFlash(),
         ]);
