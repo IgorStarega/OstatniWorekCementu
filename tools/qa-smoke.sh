@@ -321,7 +321,8 @@ else
 fi
 
 # --- 18. Schemat bazy ----------------------------------------------------
-TABLES=$(dbq "SHOW TABLES" | grep -c .)
+TABLES_LIST=$(dbq "SHOW TABLES")
+TABLES=$(printf '%s\n' "$TABLES_LIST" | grep -c .)
 COLS=$(dbq "SHOW COLUMNS FROM users" | cut -f1)
 if [ "$TABLES" = "13" ] \
     && printf '%s\n' "$COLS" | grep -q '^failed_attempts$' \
@@ -331,6 +332,12 @@ if [ "$TABLES" = "13" ] \
 else
     fail "18. Schemat: 13 tabel + kolumny users" "tabele=$TABLES"
 fi
+
+for t in status_history admin_log employee_days_off; do
+    if ! printf '%s\n' "$TABLES_LIST" | grep -qx "$t"; then
+        fail "18. schemat: brak tabeli $t" ""
+    fi
+done
 
 # --- 19. Migracje idempotentne (002, 003 i 004, dwa razy) ----------------
 MIG_OUT="$TMP/mig.txt"

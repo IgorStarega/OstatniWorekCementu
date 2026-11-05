@@ -1,0 +1,5 @@
+# Lokalne dostrojenie MySQL ładownane przez montowanie ./config/mysql:/etc/mysql/conf.d.
+# Kodowanie zgodne ze schematem (database/*.sql): utf8mb4 / utf8mb4_unicode_ci.
+[mysqld]
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
