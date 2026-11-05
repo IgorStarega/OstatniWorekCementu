@@ -250,7 +250,8 @@ Gotowy stos produkcyjny uruchamiany z obrazu GHCR (bez montowania kodu).
 Zawiera `docker-compose.yml`, `.env.example` i `README.md` z instrukcją wdrożenia.
 
 ### `docs/`
-Dokumentacja techniczna oraz materiały związane z projektem, m.in. diagram ERD.
+Dokumentacja techniczna oraz materiały związane z projektem. `ERD.md` — aktualny diagram
+(Mermaid, renderuje się na GitHubie). `ERD.jpg` — wersja archiwalna z etapu 1.
 
 ### `public/`
 Publicznie dostępna część aplikacji, z której korzysta użytkownik. `public/index.php`
