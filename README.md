@@ -95,7 +95,7 @@ Szczegółowa konfiguracja aplikacji znajduje się w katalogach:
 
 ## Baza danych
 
-System korzysta z relacyjnej bazy danych odpowiedzialnej za przechowywanie informacji związanych z użytkownikami, usługami oraz rezerwacjami. Schemat obejmuje **10 tabel**.
+System korzysta z relacyjnej bazy danych odpowiedzialnej za przechowywanie informacji związanych z użytkownikami, usługami oraz rezerwacjami. Schemat obejmuje **13 tabel**.
 
 Baza danych umożliwia między innymi przechowywanie:
 
@@ -209,13 +209,14 @@ Główna struktura repozytorium:
 > │   ├── controllers/    # kontrolery (Home, Auth, PasswordReset, EmailVerification, Profile, Dashboard, Admin)
 > │   ├── models/         # modele (Database, User, PasswordReset, EmailVerification, EmailSend,
 > │   │                   #         ServiceCategory, Service, Employee, EmployeeService,
-> │   │                   #         EmployeeAvailability, Reservation, Stats)
+> │   │                   #         EmployeeAvailability, EmployeeDayOff, Reservation,
+> │   │                   #         StatusHistory, AdminLog, Stats)
 > │   ├── helpers/        # pomocniki (CSRF, autoryzacja, walidacja, paginacja, adresy URL, tokeny)
 > │   └── views/          # widoki (layout, strony, admin/, errors/ — 403/404/500)
 > ├── config/             # konfiguracja aplikacji i serwera MySQL
 > │   └── mysql/
 > ├── database/           # schemat, dane testowe i scalony zrzut
-> │   └── migrations/     # migracje dla istniejących baz (002, 003, 004)
+> │   └── migrations/     # migracje dla istniejących baz (002–007)
 > ├── docker/             # obraz PHP, php.ini i konfiguracja Apache
 > │   └── php/
 > ├── deploy/             # deploy produkcyjny z obrazu GHCR (compose + instrukcja)
@@ -250,7 +251,8 @@ Gotowy stos produkcyjny uruchamiany z obrazu GHCR (bez montowania kodu).
 Zawiera `docker-compose.yml`, `.env.example` i `README.md` z instrukcją wdrożenia.
 
 ### `docs/`
-Dokumentacja techniczna oraz materiały związane z projektem, m.in. diagram ERD.
+Dokumentacja techniczna oraz materiały związane z projektem. `ERD.md` — aktualny diagram
+(Mermaid, renderuje się na GitHubie). `ERD.jpg` — wersja archiwalna z etapu 1.
 
 ### `public/`
 Publicznie dostępna część aplikacji, z której korzysta użytkownik. `public/index.php`
@@ -382,6 +384,12 @@ jedną z dwóch ścieżek:
 
 `docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < database/migrations/004-poprawka-kodowania.sql`
 
+`docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < database/migrations/005-historia-statusow.sql`
+
+`docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < database/migrations/006-log-administratora.sql`
+
+`docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < database/migrations/007-dni-wolne.sql`
+
 Migracje są idempotentne: sprawdzają `information_schema` przed każdym `ALTER TABLE`
 (MySQL 8.0 nie ma `ADD COLUMN IF NOT EXISTS`), więc ponowne uruchomienie nic nie psuje.
 Migracja `002` dodaje `users.failed_attempts`, `users.locked_until` i tabelę `password_resets`;
@@ -389,7 +397,9 @@ Migracja `002` dodaje `users.failed_attempts`, `users.locked_until` i tabelę `p
 a istniejące konta oznacza jako potwierdzone (`email_verified_at = NOW()`), żeby nie zablokować
 dostępu po włączeniu weryfikacji e-mail. `004` naprawia podwójne kodowanie polskich znaków
 w danych (`Ocieplanie budynkÃ³w` → `Ocieplanie budynków`); poprawione kolumny nie są ruszane
-przy kolejnym uruchomieniu.
+przy kolejnym uruchomieniu. `005` dodaje historię zmian statusów rezerwacji (`status_history`),
+`006` — log operacji administratora (`admin_log`), a `007` — dni wolne i urlopy pracowników
+(`employee_days_off`). Po wszystkich migracjach baza ma **13 tabel**.
 
 **(b) Dane są nieważne** — zaczynamy od zera:
 
@@ -400,10 +410,11 @@ przy kolejnym uruchomieniu.
 
 ## Testy
 
-Automatyczny smoke test (68 punktów w 41 sekcjach: sesja, CSRF, rejestracja z linkiem,
+Automatyczny smoke test (75 punktów kontrolnych: sesja, CSRF, rejestracja z linkiem,
 weryfikacja, XSS, IDOR, trzy role, blokada konta, dostęp do panelu administratora,
 operacje destrukcyjne, paginacja i wyszukiwanie użytkowników, favicon, ochrona
-własnego konta, schemat bazy, migracje, kodowanie polskich znaków, retencja)
+własnego konta, schemat bazy, migracje, kodowanie polskich znaków, retencja,
+historia statusów, log operacji, dni wolne, statystyki i eksport CSV)
 uruchamiamy przeciw działającemu stosowi:
 
 ```bash
@@ -425,7 +436,7 @@ Wynik to `X/Y PASS`; kod wyjścia `1`, gdy cokolwiek padło. Rzeczy wymagające 
 bash tools/qa-smoke.sh
 ```
 
-Wynik: `68/68 PASS`, 0 FAIL, 2 SKIP. SKIP-y wymagają przeglądarki lub restartu
+Wynik: `75/75 PASS`, 0 FAIL, 2 SKIP. SKIP-y wymagają przeglądarki lub restartu
 kontenera — opisane poniżej.
 
 ### Manualnie — czego automat nie sprawdzi

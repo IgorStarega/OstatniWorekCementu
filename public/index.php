@@ -31,6 +31,9 @@ require BASE_PATH . '/app/models/Service.php';
 require BASE_PATH . '/app/models/Employee.php';
 require BASE_PATH . '/app/models/EmployeeService.php';
 require BASE_PATH . '/app/models/EmployeeAvailability.php';
+require BASE_PATH . '/app/models/EmployeeDayOff.php';
+require BASE_PATH . '/app/models/StatusHistory.php';
+require BASE_PATH . '/app/models/AdminLog.php';
 require BASE_PATH . '/app/models/Reservation.php';
 require BASE_PATH . '/app/models/Stats.php';
 require BASE_PATH . '/app/controllers/HomeController.php';
@@ -148,12 +151,24 @@ switch ($page) {
         (new AdminController($config))->availability();
         break;
 
+    case 'admin-days-off':
+        (new AdminController($config))->daysOff();
+        break;
+
     case 'admin-users':
         (new AdminController($config))->users();
         break;
 
     case 'admin-reservations':
         (new AdminController($config))->reservations();
+        break;
+
+    case 'admin-reservations-export':
+        (new AdminController($config))->exportReservations();
+        break;
+
+    case 'admin-log':
+        (new AdminController($config))->log();
         break;
 
     default:

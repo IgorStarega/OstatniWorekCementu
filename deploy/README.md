@@ -48,16 +48,11 @@ Import wykonuje się **tylko raz**, przy pustym `./data/mysql`.
 > docker compose up -d
 > ```
 
-### 3. Opcjonalna konfiguracja MySQL
+### 3. Konfiguracja MySQL
 
-Compose montuje `./config/mysql` (kodowanie `utf8mb4`). Skopiuj katalog z repo:
-
-```bash
-cp -r ../config/mysql ./config/mysql
-```
-
-Bez tego kroku MySQL użyje domyślnej konfiguracji; katalog zostanie utworzony
-automatycznie i nie jest to błąd krytyczny.
+Compose montuje `./config/mysql` (kodowanie `utf8mb4`). Plik
+`deploy/config/mysql/custom.cnf` jest już w repozytorium, więc nie trzeba go
+kopiować ręcznie. Bez tego pliku MySQL użyłby domyślnej konfiguracji.
 
 ### 4. Start
 
@@ -79,6 +74,15 @@ docker compose logs -f app
 Aplikacja: `http://127.0.0.1:8082/` (lokalnie) lub `APP_URL` za tunelem.
 phpMyAdmin: `http://127.0.0.1:8084/` — za tunelem ustaw
 `PMA_ABSOLUTE_URI` z ukośnikiem na końcu, np. `https://php.dziadu.dev/`.
+
+## Sprawdzenie po starcie
+
+```bash
+docker compose exec db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE" -e "SHOW TABLES;"'
+# ma być 13 tabel
+docker compose exec app php -r 'var_dump(getenv("DB_PASS"));'
+# ma zwrócić wartość, nie false
+```
 
 ## Aktualizacja
 
@@ -105,7 +109,13 @@ przy pustym `./data/mysql`. Dla działającej bazy zastosuj migracje po kolei:
 docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < ../database/migrations/002-etap2.sql
 docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < ../database/migrations/003-etap2.sql
 docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < ../database/migrations/004-poprawka-kodowania.sql
+docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < ../database/migrations/005-historia-statusow.sql
+docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < ../database/migrations/006-log-administratora.sql
+docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < ../database/migrations/007-dni-wolne.sql
 ```
+
+Po migracjach `SHOW TABLES` ma zwrócić **13 tabel** (m.in. `status_history`,
+`admin_log` i `employee_days_off`).
 
 Opis migracji i zasady regenerowania `database.sql` są w głównym `README.md`
 (sekcja „Aktualizacja istniejącej bazy”).
@@ -115,7 +125,7 @@ Opis migracji i zasady regenerowania `database.sql` są w głównym `README.md`
 - `container_name` jest **globalny w obrębie jednego demona Dockera** — nie
   uruchamiaj dwóch kopii tego stosu na tym samym hoście (`owc-app`, `owc-db`,
   `owc-phpmyadmin` się zderzą).
-- `deploy/.env`, `database.sql`, `data/` i `config/mysql/` są w `.gitignore` —
+- `deploy/.env`, `database.sql` i `data/` są w `.gitignore` —
   nie commituj haseł ani kopii bazy.
 - Nie montuj kodu aplikacji do kontenera `app`; obraz jest samodzielny.
 - Po zmianie `.env` odtwórz kontenery: `docker compose up -d --force-recreate`.

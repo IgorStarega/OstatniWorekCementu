@@ -18,9 +18,13 @@ class AdminController
         $reservations = new Reservation($this->database());
 
         $this->render('dashboard', 'Dashboard', [
-            'counters' => $stats->counters(),
-            'upcoming' => $reservations->upcoming(5),
-            'flash'    => $this->takeFlash(),
+            'counters'    => $stats->counters(),
+            'upcoming'    => $reservations->upcoming(5),
+            'byStatus'    => $stats->byStatus(),
+            'revenue'     => $stats->revenueCompleted(),
+            'topServices' => $stats->topServices(5),
+            'workload'    => $stats->workload(),
+            'flash'       => $this->takeFlash(),
         ]);
     }
 
@@ -52,6 +56,10 @@ class AdminController
                         $this->flash('alert', 'Nie można usunąć: kategoria ma ' . $servicesCount . ' usług.');
                     } else {
                         $categories->delete($id);
+                        (new AdminLog($this->database()))->record(
+                            currentUserId(), 'delete', 'category', $id,
+                            'kategoria "' . (string) $category['name'] . '"'
+                        );
                         $this->flash('status', 'Kategoria została usunięta.');
                     }
                 }
@@ -74,10 +82,18 @@ class AdminController
 
                 if ($errors === []) {
                     if ($action === 'create') {
-                        $categories->create($name, $description);
+                        $newId = $categories->create($name, $description);
+                        (new AdminLog($this->database()))->record(
+                            currentUserId(), 'create', 'category', $newId,
+                            'kategoria "' . $name . '"'
+                        );
                         $this->flash('status', 'Kategoria została dodana.');
                     } else {
                         $categories->update($editingId, $name, $description);
+                        (new AdminLog($this->database()))->record(
+                            currentUserId(), 'update', 'category', $editingId,
+                            'kategoria "' . $name . '"'
+                        );
                         $this->flash('status', 'Kategoria została zaktualizowana.');
                     }
 
@@ -141,6 +157,9 @@ class AdminController
                         $this->flash('alert', 'Nie można usunąć: usługa ma ' . $reservationsCount . ' rezerwacji.');
                     } else {
                         $services->delete($id);
+                        (new AdminLog($this->database()))->record(
+                            currentUserId(), 'delete', 'service', $id, 'usługa #' . $id
+                        );
                         $this->flash('status', 'Usługa została usunięta.');
                     }
                 }
@@ -154,6 +173,9 @@ class AdminController
                     $errors[] = 'Nie znaleziono usługi.';
                 } else {
                     $services->toggleActive($id);
+                    (new AdminLog($this->database()))->record(
+                        currentUserId(), 'update', 'service', $id, 'usługa #' . $id . ': zmieniono aktywność'
+                    );
                     $this->flash('status', 'Aktywność usługi została zmieniona.');
                     $this->redirect('admin-services');
                 }
@@ -191,10 +213,16 @@ class AdminController
                     ];
 
                     if ($action === 'create') {
-                        $services->create($data);
+                        $newId = $services->create($data);
+                        (new AdminLog($this->database()))->record(
+                            currentUserId(), 'create', 'service', $newId, 'usługa #' . $newId
+                        );
                         $this->flash('status', 'Usługa została dodana.');
                     } else {
                         $services->update($editingId, $data);
+                        (new AdminLog($this->database()))->record(
+                            currentUserId(), 'update', 'service', $editingId, 'usługa #' . $editingId
+                        );
                         $this->flash('status', 'Usługa została zaktualizowana.');
                     }
 
@@ -266,6 +294,9 @@ class AdminController
                         $this->flash('alert', 'Nie można usunąć: pracownik ma ' . $reservationsCount . ' rezerwacji.');
                     } else {
                         $employees->delete($id);
+                        (new AdminLog($this->database()))->record(
+                            currentUserId(), 'delete', 'employee', $id, 'pracownik #' . $id
+                        );
                         $this->flash('status', 'Pracownik został usunięty.');
                     }
                 }
@@ -279,6 +310,9 @@ class AdminController
                     $errors[] = 'Nie znaleziono pracownika.';
                 } else {
                     $employees->toggleActive($id);
+                    (new AdminLog($this->database()))->record(
+                        currentUserId(), 'update', 'employee', $id, 'pracownik #' . $id . ': zmieniono aktywność'
+                    );
                     $this->flash('status', 'Aktywność pracownika została zmieniona.');
                     $this->redirect('admin-employees');
                 }
@@ -317,13 +351,16 @@ class AdminController
                 if ($errors === []) {
                     try {
                         if ($action === 'create') {
-                            $employees->createWithUser([
+                            $newId = $employees->createWithUser([
                                 'first_name' => $firstName,
                                 'last_name'  => $lastName,
                                 'email'      => $email,
                                 'phone'      => $phone,
                                 'password'   => password_hash($password, PASSWORD_DEFAULT),
                             ], $description);
+                            (new AdminLog($this->database()))->record(
+                                currentUserId(), 'create', 'employee', $newId, 'pracownik #' . $newId
+                            );
                             $this->flash('status', 'Pracownik został dodany.');
                         } else {
                             $employees->update($editingId, [
@@ -332,6 +369,9 @@ class AdminController
                                 'email'      => $email,
                                 'phone'      => $phone,
                             ], $description);
+                            (new AdminLog($this->database()))->record(
+                                currentUserId(), 'update', 'employee', $editingId, 'pracownik #' . $editingId
+                            );
                             $this->flash('status', 'Dane pracownika zostały zaktualizowane.');
                         }
 
@@ -563,6 +603,109 @@ class AdminController
         ]);
     }
 
+    // --- Dni wolne i urlopy ------------------------------------------------
+
+    public function daysOff(): void
+    {
+        requireRole('admin');
+
+        $employeesModel = new Employee($this->database());
+        $dayOffModel = new EmployeeDayOff($this->database());
+        $employees = $employeesModel->all();
+        $errors = [];
+        $formDate = '';
+        $formReason = '';
+
+        $selectedEmployeeId = $_SERVER['REQUEST_METHOD'] === 'POST'
+            ? $this->postId('employee_id')
+            : $this->getInt('employee_id');
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            csrf_verify(postString('csrf_token'));
+            $action = postString('action');
+
+            $employee = $selectedEmployeeId > 0 ? $employeesModel->find($selectedEmployeeId) : null;
+            if ($employee === null) {
+                $errors[] = 'Wybierz istniejącego pracownika.';
+            }
+
+            if ($action === 'add') {
+                $formDate = trim(postString('date'));
+                $formReason = trim(postString('reason'));
+
+                $dateObject = DateTime::createFromFormat('!Y-m-d', $formDate);
+                $dateErrors = DateTime::getLastErrors();
+                $validDate = $dateObject !== false
+                    && ($dateErrors === false
+                        || ($dateErrors['warning_count'] === 0 && $dateErrors['error_count'] === 0))
+                    && $dateObject->format('Y-m-d') === $formDate;
+
+                if (!$validDate) {
+                    $errors[] = 'Podaj poprawną datę w formacie RRRR-MM-DD.';
+                } elseif ($dateObject < new DateTime('today')) {
+                    $errors[] = 'Data dnia wolnego nie może być w przeszłości.';
+                }
+
+                if (mb_strlen($formReason) > 150) {
+                    $errors[] = 'Powód może mieć maksymalnie 150 znaków.';
+                }
+
+                if ($errors === []) {
+                    try {
+                        $dayOffModel->add($selectedEmployeeId, $formDate, $formReason);
+                        $this->flash('status', 'Dzień wolny został dodany.');
+                        $this->redirect('admin-days-off', ['employee_id' => $selectedEmployeeId]);
+                    } catch (PDOException $exception) {
+                        if ((string) $exception->getCode() === '23000') {
+                            $errors[] = 'Ten dzień jest już oznaczony jako wolny.';
+                        } else {
+                            error_log('Błąd zapisu dnia wolnego: ' . $exception->getMessage());
+                            $errors[] = 'Nie udało się zapisać dnia wolnego. Spróbuj ponownie.';
+                        }
+                    } catch (Throwable $exception) {
+                        error_log('Błąd zapisu dnia wolnego: ' . $exception->getMessage());
+                        $errors[] = 'Nie udało się zapisać dnia wolnego. Spróbuj ponownie.';
+                    }
+                }
+            } elseif ($action === 'delete') {
+                $id = $this->postId('id');
+
+                if ($id < 1) {
+                    $errors[] = 'Nie znaleziono dnia wolnego do usunięcia.';
+                } else {
+                    try {
+                        $dayOffModel->delete($id);
+                        $this->flash('status', 'Dzień wolny został usunięty.');
+                        $this->redirect('admin-days-off', ['employee_id' => $selectedEmployeeId]);
+                    } catch (Throwable $exception) {
+                        error_log('Błąd usuwania dnia wolnego: ' . $exception->getMessage());
+                        $errors[] = 'Nie udało się usunąć dnia wolnego. Spróbuj ponownie.';
+                    }
+                }
+            } else {
+                $errors[] = 'Nieznana akcja formularza.';
+            }
+        } else {
+            if ($selectedEmployeeId < 1 && $employees !== []) {
+                $selectedEmployeeId = (int) $employees[0]['id'];
+            }
+        }
+
+        $selectedEmployee = $selectedEmployeeId > 0 ? $employeesModel->find($selectedEmployeeId) : null;
+        $daysOff = $selectedEmployee !== null ? $dayOffModel->forEmployee($selectedEmployeeId) : [];
+
+        $this->render('days_off', 'Dni wolne', [
+            'employees'          => $employees,
+            'errors'             => $errors,
+            'flash'              => $this->takeFlash(),
+            'selectedEmployeeId' => $selectedEmployeeId,
+            'selectedEmployee'   => $selectedEmployee,
+            'daysOff'            => $daysOff,
+            'formDate'           => $formDate,
+            'formReason'         => $formReason,
+        ]);
+    }
+
     // --- Użytkownicy -------------------------------------------------------
 
     public function users(): void
@@ -620,6 +763,10 @@ class AdminController
                 if (!in_array($newRole, User::ROLES, true)) {
                     $this->flash('alert', 'Nieprawidłowa rola użytkownika.');
                 } elseif ($usersModel->updateRole($id, $newRole)) {
+                    (new AdminLog($this->database()))->record(
+                        currentUserId(), 'update', 'user', $id,
+                        'użytkownik #' . $id . ': rola ' . (string) $target['role'] . ' → ' . $newRole
+                    );
                     $this->flash('status', 'Rola użytkownika została zmieniona.');
                 } else {
                     $this->flash('alert', 'Nie udało się zmienić roli użytkownika.');
@@ -631,6 +778,10 @@ class AdminController
             if ($action === 'toggle') {
                 $isActive = (int) $target['is_active'] === 1;
                 $usersModel->setActive($id, !$isActive);
+                (new AdminLog($this->database()))->record(
+                    currentUserId(), 'update', 'user', $id,
+                    'użytkownik #' . $id . ($isActive ? ': konto zablokowane' : ': konto odblokowane')
+                );
                 $this->flash(
                     'status',
                     $isActive ? 'Konto użytkownika zostało zablokowane.' : 'Konto użytkownika zostało odblokowane.'
@@ -696,13 +847,28 @@ class AdminController
             } else {
                 $id = $this->postId('id');
                 $newStatus = postString('status');
+                $reservationRecord = $id > 0 ? $model->find($id) : null;
 
-                if ($id < 1 || $model->find($id) === null) {
+                if ($reservationRecord === null) {
                     $this->flash('alert', 'Nie znaleziono rezerwacji.');
-                } elseif (!$model->updateStatus($id, $newStatus)) {
+                } elseif (!$model->updateStatus($id, $newStatus, currentUserId())) {
                     $this->flash('alert', 'Nieprawidłowy status.');
                 } else {
-                    $this->flash('status', 'Status rezerwacji został zmieniony.');
+                    $oldStatus = (string) $reservationRecord['status'];
+
+                    if ($oldStatus !== $newStatus) {
+                        (new AdminLog($this->database()))->record(
+                            currentUserId(), 'status', 'reservation', $id,
+                            'status: ' . $oldStatus . ' → ' . $newStatus
+                        );
+                    }
+
+                    $this->flash(
+                        'status',
+                        $oldStatus === $newStatus
+                            ? 'Status rezerwacji nie uległ zmianie.'
+                            : 'Status rezerwacji został zmieniony.'
+                    );
                 }
 
                 $this->redirect('admin-reservations', $preservedFilters);
@@ -732,8 +898,75 @@ class AdminController
             'pagination'   => $pagination,
             'employees'    => $employeesModel->all(),
             'statuses'     => Reservation::STATUSES,
+            'history'      => $reservation === null
+                ? []
+                : (new StatusHistory($this->database()))->forReservation((int) $reservation['id']),
             'errors'       => $errors,
             'flash'        => $this->takeFlash(),
+        ]);
+    }
+
+    // --- Eksport rezerwacji ------------------------------------------------
+
+    public function exportReservations(): void
+    {
+        requireRole('admin');
+
+        $model = new Reservation($this->database());
+        $filters = $this->reservationFilters();
+        $reservations = $model->list($filters);
+
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="rezerwacje-' . date('Y-m-d') . '.csv"');
+
+        $out = fopen('php://output', 'w');
+        if ($out === false) {
+            exit;
+        }
+
+        // BOM — polski Excel poprawnie rozpoznaje UTF-8.
+        fwrite($out, "\xEF\xBB\xBF");
+
+        // Średnik jako separator — domyślny dla polskiego Excela.
+        fputcsv($out, [
+            'ID', 'Data', 'Godzina od', 'Godzina do', 'Klient', 'E-mail', 'Telefon',
+            'Pracownik', 'Usługa', 'Cena', 'Status', 'Komentarz',
+        ], ';');
+
+        foreach ($reservations as $row) {
+            $reservationDate = strtotime((string) $row['reservation_date']);
+
+            fputcsv($out, [
+                (int) $row['id'],
+                $reservationDate !== false ? date('d.m.Y', $reservationDate) : (string) $row['reservation_date'],
+                substr((string) $row['start_time'], 0, 5),
+                substr((string) $row['end_time'], 0, 5),
+                (string) $row['client_name'],
+                (string) $row['client_email'],
+                (string) ($row['client_phone'] ?? ''),
+                (string) $row['employee_name'],
+                (string) $row['service_name'],
+                number_format((float) $row['final_price'], 2, ',', ''),
+                (string) $row['status'],
+                (string) ($row['comment'] ?? ''),
+            ], ';');
+        }
+
+        fclose($out);
+        exit;
+    }
+
+    // --- Log operacji ------------------------------------------------------
+
+    public function log(): void
+    {
+        requireRole('admin');
+
+        $log = new AdminLog($this->database());
+
+        $this->render('log', 'Log operacji', [
+            'entries' => $log->recent(100),
+            'flash'   => $this->takeFlash(),
         ]);
     }
 

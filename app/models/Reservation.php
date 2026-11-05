@@ -98,22 +98,56 @@ class Reservation
     }
 
     // Zmiana statusu z whitelistą wartości — walidacja należy do modelu,
-    // bo sam kontroler nie może być jedyną barierą.
-    public function updateStatus(int $id, string $status): bool
+    // bo sam kontroler nie może być jedyną barierą. SELECT ... FOR UPDATE
+    // blokuje wiersz, więc dwa równoległe kliknięcia nie zapiszą sprzecznej historii.
+    public function updateStatus(int $id, string $status, ?int $changedBy = null): bool
     {
         if (!in_array($status, self::STATUSES, true)) {
             return false;
         }
 
-        $statement = $this->pdo->prepare(
-            'UPDATE reservations SET status = :status WHERE id = :id'
-        );
-        $statement->execute([
-            'status' => $status,
-            'id'     => $id,
-        ]);
+        $this->pdo->beginTransaction();
 
-        return true;
+        try {
+            $statement = $this->pdo->prepare(
+                'SELECT status FROM reservations WHERE id = :id FOR UPDATE'
+            );
+            $statement->execute(['id' => $id]);
+            $oldStatus = $statement->fetchColumn();
+
+            if ($oldStatus === false) {
+                $this->pdo->rollBack();
+                return false;
+            }
+
+            $oldStatus = (string) $oldStatus;
+
+            // Bez zmiany nie ma wpisu — historia ma opisywać faktyczne operacje.
+            if ($oldStatus === $status) {
+                $this->pdo->rollBack();
+                return true;
+            }
+
+            $statement = $this->pdo->prepare(
+                'UPDATE reservations SET status = :status WHERE id = :id'
+            );
+            $statement->execute([
+                'status' => $status,
+                'id'     => $id,
+            ]);
+
+            (new StatusHistory($this->pdo))->record($id, $oldStatus, $status, $changedBy);
+
+            $this->pdo->commit();
+
+            return true;
+        } catch (Throwable $exception) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+
+            throw $exception;
+        }
     }
 
     private function baseSelect(): string

@@ -75,6 +75,8 @@ cleanup() {
          WHERE email = 'tomasz.zielinski@example.com'" >/dev/null 2>&1
     # Kategoria z testu XSS nie może zostać w bazie po przerwanym przebiegu.
     dbq "DELETE FROM service_categories WHERE name = '<script>alert(1)</script>'" >/dev/null 2>&1
+    # Test dni wolnych nie może zostawić wpisu blokującego kolejny przebieg.
+    dbq "DELETE FROM employee_days_off WHERE employee_id = 1 AND date = '2026-12-24'" >/dev/null 2>&1
     # Test zmiany roli przywraca konto Anny; własne konto admina zawsze aktywne.
     dbq "UPDATE users SET role = 'klient' WHERE email = 'anna.kowalska@example.com'" >/dev/null 2>&1
     dbq "UPDATE users SET is_active = 1 WHERE email = 'admin@ostatniworekcementu.pl'" >/dev/null 2>&1
@@ -92,6 +94,20 @@ fi
 if [ "$(dbq "SHOW TABLES LIKE 'users'")" != "users" ]; then
     echo "BŁĄD: baza nie ma zaimportowanego schematu. Poczekaj na inicjalizację MySQL." >&2
     exit 2
+fi
+
+# Baza bez migracji 005–007 nie przejdzie testów nowych modułów — lepiej
+# zatrzymać się od razu z czytelnym komunikatem niż dostać serię FAIL.
+MISSING_TABLES=""
+for table in status_history admin_log employee_days_off; do
+    if [ "$(dbq "SHOW TABLES LIKE '$table'")" != "$table" ]; then
+        MISSING_TABLES="$MISSING_TABLES $table"
+    fi
+done
+
+if [ -n "$MISSING_TABLES" ]; then
+    echo "BŁĄD: baza nie ma migracji 005–007 (brak tabel:$MISSING_TABLES). Uruchom migracje z database/migrations/." >&2
+    exit 1
 fi
 
 if ! curl -fsS -o /dev/null "$BASE_URL/?page=home" 2>/dev/null; then
@@ -319,34 +335,43 @@ else
 fi
 
 # --- 18. Schemat bazy ----------------------------------------------------
-TABLES=$(dbq "SHOW TABLES" | grep -c .)
+TABLES_LIST=$(dbq "SHOW TABLES")
+TABLES=$(printf '%s\n' "$TABLES_LIST" | grep -c .)
 COLS=$(dbq "SHOW COLUMNS FROM users" | cut -f1)
-if [ "$TABLES" = "10" ] \
+if [ "$TABLES" = "13" ] \
     && printf '%s\n' "$COLS" | grep -q '^failed_attempts$' \
     && printf '%s\n' "$COLS" | grep -q '^locked_until$' \
     && printf '%s\n' "$COLS" | grep -q '^email_verified_at$'; then
-    pass "18. Schemat: 10 tabel + kolumny users"
+    pass "18. Schemat: 13 tabel + kolumny users"
 else
-    fail "18. Schemat: 10 tabel + kolumny users" "tabele=$TABLES"
+    fail "18. Schemat: 13 tabel + kolumny users" "tabele=$TABLES"
 fi
 
-# --- 19. Migracje idempotentne (002, 003 i 004, dwa razy) ----------------
+for t in status_history admin_log employee_days_off; do
+    if ! printf '%s\n' "$TABLES_LIST" | grep -qx "$t"; then
+        fail "18. schemat: brak tabeli $t" ""
+    fi
+done
+
+# --- 19. Migracje idempotentne (002–007, dwa razy) -----------------------
 MIG_OUT="$TMP/mig.txt"
 for _ in 1 2; do
-    docker compose exec -T "$DB_SERVICE" sh -c \
-        'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
-        < database/migrations/002-etap2.sql >>"$MIG_OUT" 2>&1
-    docker compose exec -T "$DB_SERVICE" sh -c \
-        'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
-        < database/migrations/003-etap2.sql >>"$MIG_OUT" 2>&1
-    docker compose exec -T "$DB_SERVICE" sh -c \
-        'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
-        < database/migrations/004-poprawka-kodowania.sql >>"$MIG_OUT" 2>&1
+    for migration in \
+        002-etap2.sql \
+        003-etap2.sql \
+        004-poprawka-kodowania.sql \
+        005-historia-statusow.sql \
+        006-log-administratora.sql \
+        007-dni-wolne.sql; do
+        docker compose exec -T "$DB_SERVICE" sh -c \
+            'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
+            < "database/migrations/$migration" >>"$MIG_OUT" 2>&1
+    done
 done
 if ! grep -qi 'ERROR' "$MIG_OUT"; then
-    pass "19. Migracje 002, 003 i 004 idempotentne (dwa przebiegi)"
+    pass "19. Migracje 002–007 idempotentne (dwa przebiegi)"
 else
-    fail "19. Migracje 002, 003 i 004 idempotentne (dwa przebiegi)" "$(grep -i 'ERROR' "$MIG_OUT" | head -1)"
+    fail "19. Migracje 002–007 idempotentne (dwa przebiegi)" "$(grep -i 'ERROR' "$MIG_OUT" | head -1)"
 fi
 
 # --- 20. Retencja email_sends -------------------------------------------
@@ -463,6 +488,30 @@ else
     fail "24c. Rezerwacje: zmiana statusu -> 302" "kod=$code"
 fi
 
+# --- 24d. Historia statusu zapisuje zmianę ------------------------------
+CSRF=$(get_csrf "$BASE_URL/?page=admin-reservations&id=1" "$JAR_RES")
+req POST "$BASE_URL/?page=admin-reservations" -b "$JAR_RES" -c "$JAR_RES" >/dev/null \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "action=status" --data-urlencode "id=1" \
+    --data-urlencode "status=zrealizowana"
+HIST=$(dbq "SELECT COUNT(*) FROM status_history WHERE reservation_id = 1 AND new_status = 'zrealizowana'")
+if [ "${HIST:-0}" -ge 1 ]; then
+    pass "24d. Historia statusu zapisuje zmianę"
+else
+    fail "24d. Historia statusu zapisuje zmianę" "wpisów: ${HIST:-0}"
+fi
+
+# --- 24e. Eksport CSV zwraca plik ---------------------------------------
+code=$(req GET "$BASE_URL/?page=admin-reservations-export" -b "$JAR_RES" -c "$JAR_RES")
+if [ "$code" = "200" ] && grep -qi 'content-type: text/csv' "$TMP/hdr" \
+   && grep -q ';' "$TMP/body" \
+   && grep -q $'\xEF\xBB\xBF' "$TMP/body" \
+   && ! grep -qE 'Fatal error|Uncaught' "$TMP/body"; then
+    pass "24e. Eksport CSV"
+else
+    fail "24e. Eksport CSV" "kod=$code"
+fi
+
 # --- 25. Dashboard: kafelki z realnymi danymi ---------------------------
 JAR_DASH="$TMP/dash.txt"
 CSRF=$(get_csrf "$BASE_URL/?page=login" "$JAR_DASH")
@@ -482,6 +531,16 @@ else
     fail "25. dashboard renders counters, no placeholder" "kod=$code"
 fi
 
+# --- 25b. Dashboard: sekcja statystyk -----------------------------------
+code=$(req GET "$BASE_URL/?page=admin-dashboard" -b "$JAR_DASH" -c "$JAR_DASH")
+if [ "$code" = "200" ] && grep -q 'Przychód' "$TMP/body" \
+   && grep -q 'Najczęściej' "$TMP/body" \
+   && ! grep -qE 'Fatal error|Warning|Uncaught' "$TMP/body"; then
+    pass "25b. dashboard renders statistics"
+else
+    fail "25b. dashboard renders statistics" "kod=$code"
+fi
+
 # --- 26. Dostępność pracownika: render tygodnia --------------------------
 JAR_AVAIL="$TMP/avail.txt"
 CSRF=$(get_csrf "$BASE_URL/?page=login" "$JAR_AVAIL")
@@ -497,6 +556,33 @@ if [ "$code" = "200" ] && grep -q 'Poniedziałek' "$TMP/body" \
 else
     fail "26. admin-availability renders week table" "kod=$code"
 fi
+
+# --- 26b. Dni wolne: dodanie i blokada duplikatu -------------------------
+CSRF=$(get_csrf "$BASE_URL/?page=admin-days-off&employee_id=1" "$JAR_AVAIL")
+code=$(req POST "$BASE_URL/?page=admin-days-off" -b "$JAR_AVAIL" -c "$JAR_AVAIL" \
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "action=add" \
+    --data-urlencode "employee_id=1" --data-urlencode "date=2026-12-24" \
+    --data-urlencode "reason=Wigilia")
+ADDED=$(dbq "SELECT COUNT(*) FROM employee_days_off WHERE employee_id = 1 AND date = '2026-12-24'")
+if [ "${ADDED:-0}" -ge 1 ]; then
+    pass "26b. Dni wolne: dodanie działa"
+else
+    fail "26b. Dni wolne: dodanie działa" "kod=$code"
+fi
+
+CSRF=$(get_csrf "$BASE_URL/?page=admin-days-off&employee_id=1" "$JAR_AVAIL")
+code=$(req POST "$BASE_URL/?page=admin-days-off" -b "$JAR_AVAIL" -c "$JAR_AVAIL" \
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "action=add" \
+    --data-urlencode "employee_id=1" --data-urlencode "date=2026-12-24" \
+    --data-urlencode "reason=Wigilia")
+if [ "$code" = "200" ] && grep -q 'już oznaczony jako wolny' "$TMP/body" \
+   && ! grep -qE 'SQLSTATE|Fatal error|Uncaught' "$TMP/body"; then
+    pass "26c. Dni wolne: duplikat daty odrzucony komunikatem"
+else
+    fail "26c. Dni wolne: duplikat daty odrzucony komunikatem" "kod=$code"
+fi
+
+dbq "DELETE FROM employee_days_off WHERE employee_id = 1 AND date = '2026-12-24'" >/dev/null 2>&1
 
 # --- 27. Użytkownicy: lista i filtr --------------------------------------
 JAR_USR="$TMP/usr.txt"
@@ -634,6 +720,36 @@ if [ "$ACTIVE" = "1" ]; then
 else
     fail "37. własne konto nie da się zablokować" "is_active=$ACTIVE"
 fi
+
+# --- 38. Log administratora zapisuje operację ---------------------------
+JAR_LOG="$TMP/log.txt"
+CSRF=$(get_csrf "$BASE_URL/?page=login" "$JAR_LOG")
+req POST "$BASE_URL/?page=login" -b "$JAR_LOG" -c "$JAR_LOG" >/dev/null \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "email=admin@ostatniworekcementu.pl" --data-urlencode "password=Haslo123!"
+
+CSRF=$(get_csrf "$BASE_URL/?page=admin-categories" "$JAR_LOG")
+req POST "$BASE_URL/?page=admin-categories" -b "$JAR_LOG" -c "$JAR_LOG" >/dev/null \
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "action=create" \
+    --data-urlencode "name=Log Test" --data-urlencode "description=test"
+
+LOGGED=$(dbq "SELECT COUNT(*) FROM admin_log WHERE entity = 'category' AND details LIKE '%Log Test%'")
+if [ "${LOGGED:-0}" -ge 1 ]; then
+    pass "38. admin_log zapisuje operację"
+else
+    fail "38. admin_log zapisuje operację" "wpisów: ${LOGGED:-0}"
+fi
+
+code=$(req GET "$BASE_URL/?page=admin-log" -b "$JAR_LOG" -c "$JAR_LOG")
+if [ "$code" = "200" ] && grep -q 'Log Test' "$TMP/body"; then
+    pass "38b. admin-log renders entries"
+else
+    fail "38b. admin-log renders entries" "kod=$code"
+fi
+
+# sprzątanie po teście logu
+dbq "DELETE FROM service_categories WHERE name = 'Log Test'" >/dev/null 2>&1
+dbq "DELETE FROM admin_log WHERE details LIKE '%Log Test%'" >/dev/null 2>&1
 
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------
 skip "Widok 500 przy błędnym DB_PASS" "wymaga restartu kontenera z innym DB_PASS (environment w compose); nie testujemy w tym przebiegu"

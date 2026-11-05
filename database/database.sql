@@ -16,7 +16,7 @@
 -- Wersja PHP: 8.3.26
 
 -- Plik odtwarza bazę od zera: tworzy bazę `budowlanka_rezerwacje`
--- i całą strukturę (10 tabel, klucze, indeksy). Bez danych testowych.
+-- i całą strukturę (13 tabel, klucze, indeksy). Bez danych testowych.
 CREATE DATABASE IF NOT EXISTS `budowlanka_rezerwacje`
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `budowlanka_rezerwacje`;
@@ -65,6 +65,19 @@ CREATE TABLE `employee_availability` (
 -- --------------------------------------------------------
 
 --
+-- Struktura tabeli dla tabeli `employee_days_off`
+--
+
+CREATE TABLE `employee_days_off` (
+  `id` int NOT NULL,
+  `employee_id` int NOT NULL,
+  `date` date NOT NULL,
+  `reason` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Struktura tabeli dla tabeli `employee_services`
 --
 
@@ -90,6 +103,37 @@ CREATE TABLE `reservations` (
   `end_time` time NOT NULL,
   `status` enum('oczekująca','potwierdzona','zrealizowana','anulowana') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'oczekująca',
   `comment` text COLLATE utf8mb4_unicode_ci,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Struktura tabeli dla tabeli `status_history`
+--
+
+CREATE TABLE `status_history` (
+  `id` int NOT NULL,
+  `reservation_id` int NOT NULL,
+  `old_status` enum('oczekująca','potwierdzona','zrealizowana','anulowana') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `new_status` enum('oczekująca','potwierdzona','zrealizowana','anulowana') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `changed_by` int DEFAULT NULL,
+  `changed_at` datetime DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Struktura tabeli dla tabeli `admin_log`
+--
+
+CREATE TABLE `admin_log` (
+  `id` int NOT NULL,
+  `user_id` int DEFAULT NULL,
+  `action` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entity` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entity_id` int DEFAULT NULL,
+  `details` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -212,6 +256,14 @@ ALTER TABLE `employee_availability`
   ADD UNIQUE KEY `uq_employee_day` (`employee_id`,`day_of_week`);
 
 --
+-- Indeksy dla tabeli `employee_days_off`
+--
+ALTER TABLE `employee_days_off`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_employee_date` (`employee_id`,`date`),
+  ADD KEY `date` (`date`);
+
+--
 -- Indeksy dla tabeli `employee_services`
 --
 ALTER TABLE `employee_services`
@@ -229,6 +281,24 @@ ALTER TABLE `reservations`
   ADD KEY `reservation_date` (`reservation_date`),
   ADD KEY `status` (`status`),
   ADD UNIQUE KEY `uq_employee_slot` (`employee_id`,`reservation_date`,`start_time`);
+
+--
+-- Indeksy dla tabeli `status_history`
+--
+ALTER TABLE `status_history`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `reservation_id` (`reservation_id`),
+  ADD KEY `changed_by` (`changed_by`),
+  ADD KEY `changed_at` (`changed_at`);
+
+--
+-- Indeksy dla tabeli `admin_log`
+--
+ALTER TABLE `admin_log`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_id` (`user_id`),
+  ADD KEY `created_at` (`created_at`),
+  ADD KEY `entity` (`entity`,`entity_id`);
 
 --
 -- Indeksy dla tabeli `services`
@@ -290,9 +360,27 @@ ALTER TABLE `employee_availability`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT dla tabeli `employee_days_off`
+--
+ALTER TABLE `employee_days_off`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT dla tabeli `reservations`
 --
 ALTER TABLE `reservations`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT dla tabeli `status_history`
+--
+ALTER TABLE `status_history`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT dla tabeli `admin_log`
+--
+ALTER TABLE `admin_log`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
@@ -348,6 +436,12 @@ ALTER TABLE `employee_availability`
   ADD CONSTRAINT `employee_availability_ibfk_1` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
+-- Ograniczenia dla tabeli `employee_days_off`
+--
+ALTER TABLE `employee_days_off`
+  ADD CONSTRAINT `employee_days_off_ibfk_1` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
 -- Ograniczenia dla tabeli `employee_services`
 --
 ALTER TABLE `employee_services`
@@ -361,6 +455,19 @@ ALTER TABLE `reservations`
   ADD CONSTRAINT `reservations_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   ADD CONSTRAINT `reservations_ibfk_2` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   ADD CONSTRAINT `reservations_ibfk_3` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+--
+-- Ograniczenia dla tabeli `status_history`
+--
+ALTER TABLE `status_history`
+  ADD CONSTRAINT `status_history_ibfk_1` FOREIGN KEY (`reservation_id`) REFERENCES `reservations` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `status_history_ibfk_2` FOREIGN KEY (`changed_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+--
+-- Ograniczenia dla tabeli `admin_log`
+--
+ALTER TABLE `admin_log`
+  ADD CONSTRAINT `admin_log_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 --
 -- Ograniczenia dla tabeli `services`
@@ -383,8 +490,9 @@ COMMIT;
 -- OSTATNI WOREK CEMENTU
 -- =========================================
 
--- Struktura powyżej przywraca character_set_client z połączenia, dlatego przed
--- danymi ponownie ustawiamy utf8mb4 — inaczej polskie znaki byłyby podwójnie kodowane.
+-- Plik jest zwykle doklejany po strukturze, która na końcu przywraca
+-- character_set_client z połączenia (zwykle latin1). Bez tej linii polskie
+-- znaki zapisałyby się podwójnie zakodowane.
 SET NAMES utf8mb4;
 
 -- KATEGORIE USŁUG
@@ -724,3 +832,15 @@ VALUES
  'oczekująca',
  'Ocieplenie budynku jednorodzinnego.'
 );
+
+
+-- =========================================
+-- HISTORIA STATUSÓW REZERWACJI
+-- Pierwszy wpis każdej rezerwacji: old_status = NULL (utworzenie),
+-- autor = administrator (id 7), data = created_at rezerwacji.
+-- =========================================
+
+INSERT INTO status_history
+(reservation_id, old_status, new_status, changed_by, changed_at)
+SELECT id, NULL, status, 7, created_at
+FROM reservations;

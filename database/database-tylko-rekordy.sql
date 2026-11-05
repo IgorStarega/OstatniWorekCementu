@@ -345,3 +345,15 @@ VALUES
  'oczekująca',
  'Ocieplenie budynku jednorodzinnego.'
 );
+
+
+-- =========================================
+-- HISTORIA STATUSÓW REZERWACJI
+-- Pierwszy wpis każdej rezerwacji: old_status = NULL (utworzenie),
+-- autor = administrator (id 7), data = created_at rezerwacji.
+-- =========================================
+
+INSERT INTO status_history
+(reservation_id, old_status, new_status, changed_by, changed_at)
+SELECT id, NULL, status, 7, created_at
+FROM reservations;

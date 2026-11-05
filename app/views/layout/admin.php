@@ -27,6 +27,11 @@ $adminModules = [
         'icon'  => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     ],
     [
+        'page'  => 'admin-days-off',
+        'label' => 'Dni wolne',
+        'icon'  => '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M9 15l2 2 4-4"/>',
+    ],
+    [
         'page'  => 'admin-users',
         'label' => 'Użytkownicy',
         'icon'  => '<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>',
@@ -35,6 +40,11 @@ $adminModules = [
         'page'  => 'admin-reservations',
         'label' => 'Rezerwacje',
         'icon'  => '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01"/>',
+    ],
+    [
+        'page'  => 'admin-log',
+        'label' => 'Log operacji',
+        'icon'  => '<path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/>',
     ],
 ];
 ?>
