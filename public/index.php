@@ -32,6 +32,7 @@ require BASE_PATH . '/app/models/Employee.php';
 require BASE_PATH . '/app/models/EmployeeService.php';
 require BASE_PATH . '/app/models/EmployeeAvailability.php';
 require BASE_PATH . '/app/models/StatusHistory.php';
+require BASE_PATH . '/app/models/AdminLog.php';
 require BASE_PATH . '/app/models/Reservation.php';
 require BASE_PATH . '/app/models/Stats.php';
 require BASE_PATH . '/app/controllers/HomeController.php';
@@ -155,6 +156,10 @@ switch ($page) {
 
     case 'admin-reservations':
         (new AdminController($config))->reservations();
+        break;
+
+    case 'admin-log':
+        (new AdminController($config))->log();
         break;
 
     default:

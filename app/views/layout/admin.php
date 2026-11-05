@@ -36,6 +36,11 @@ $adminModules = [
         'label' => 'Rezerwacje',
         'icon'  => '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01"/>',
     ],
+    [
+        'page'  => 'admin-log',
+        'label' => 'Log operacji',
+        'icon'  => '<path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/>',
+    ],
 ];
 ?>
 <div class="admin-layout">

@@ -321,13 +321,13 @@ fi
 # --- 18. Schemat bazy ----------------------------------------------------
 TABLES=$(dbq "SHOW TABLES" | grep -c .)
 COLS=$(dbq "SHOW COLUMNS FROM users" | cut -f1)
-if [ "$TABLES" = "11" ] \
+if [ "$TABLES" = "12" ] \
     && printf '%s\n' "$COLS" | grep -q '^failed_attempts$' \
     && printf '%s\n' "$COLS" | grep -q '^locked_until$' \
     && printf '%s\n' "$COLS" | grep -q '^email_verified_at$'; then
-    pass "18. Schemat: 11 tabel + kolumny users"
+    pass "18. Schemat: 12 tabel + kolumny users"
 else
-    fail "18. Schemat: 11 tabel + kolumny users" "tabele=$TABLES"
+    fail "18. Schemat: 12 tabel + kolumny users" "tabele=$TABLES"
 fi
 
 # --- 19. Migracje idempotentne (002, 003 i 004, dwa razy) ----------------
@@ -647,6 +647,36 @@ if [ "$ACTIVE" = "1" ]; then
 else
     fail "37. własne konto nie da się zablokować" "is_active=$ACTIVE"
 fi
+
+# --- 38. Log administratora zapisuje operację ---------------------------
+JAR_LOG="$TMP/log.txt"
+CSRF=$(get_csrf "$BASE_URL/?page=login" "$JAR_LOG")
+req POST "$BASE_URL/?page=login" -b "$JAR_LOG" -c "$JAR_LOG" >/dev/null \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "email=admin@ostatniworekcementu.pl" --data-urlencode "password=Haslo123!"
+
+CSRF=$(get_csrf "$BASE_URL/?page=admin-categories" "$JAR_LOG")
+req POST "$BASE_URL/?page=admin-categories" -b "$JAR_LOG" -c "$JAR_LOG" >/dev/null \
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "action=create" \
+    --data-urlencode "name=Log Test" --data-urlencode "description=test"
+
+LOGGED=$(dbq "SELECT COUNT(*) FROM admin_log WHERE entity = 'category' AND details LIKE '%Log Test%'")
+if [ "${LOGGED:-0}" -ge 1 ]; then
+    pass "38. admin_log zapisuje operację"
+else
+    fail "38. admin_log zapisuje operację" "wpisów: ${LOGGED:-0}"
+fi
+
+code=$(req GET "$BASE_URL/?page=admin-log" -b "$JAR_LOG" -c "$JAR_LOG")
+if [ "$code" = "200" ] && grep -q 'Log Test' "$TMP/body"; then
+    pass "38b. admin-log renders entries"
+else
+    fail "38b. admin-log renders entries" "kod=$code"
+fi
+
+# sprzątanie po teście logu
+dbq "DELETE FROM service_categories WHERE name = 'Log Test'" >/dev/null 2>&1
+dbq "DELETE FROM admin_log WHERE details LIKE '%Log Test%'" >/dev/null 2>&1
 
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------
 skip "Widok 500 przy błędnym DB_PASS" "wymaga restartu kontenera z innym DB_PASS (environment w compose); nie testujemy w tym przebiegu"

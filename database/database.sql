@@ -111,6 +111,22 @@ CREATE TABLE `status_history` (
 -- --------------------------------------------------------
 
 --
+-- Struktura tabeli dla tabeli `admin_log`
+--
+
+CREATE TABLE `admin_log` (
+  `id` int NOT NULL,
+  `user_id` int DEFAULT NULL,
+  `action` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entity` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entity_id` int DEFAULT NULL,
+  `details` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Struktura tabeli dla tabeli `services`
 --
 
@@ -255,6 +271,15 @@ ALTER TABLE `status_history`
   ADD KEY `changed_at` (`changed_at`);
 
 --
+-- Indeksy dla tabeli `admin_log`
+--
+ALTER TABLE `admin_log`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_id` (`user_id`),
+  ADD KEY `created_at` (`created_at`),
+  ADD KEY `entity` (`entity`,`entity_id`);
+
+--
 -- Indeksy dla tabeli `services`
 --
 ALTER TABLE `services`
@@ -323,6 +348,12 @@ ALTER TABLE `reservations`
 -- AUTO_INCREMENT dla tabeli `status_history`
 --
 ALTER TABLE `status_history`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT dla tabeli `admin_log`
+--
+ALTER TABLE `admin_log`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
@@ -398,6 +429,12 @@ ALTER TABLE `reservations`
 ALTER TABLE `status_history`
   ADD CONSTRAINT `status_history_ibfk_1` FOREIGN KEY (`reservation_id`) REFERENCES `reservations` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `status_history_ibfk_2` FOREIGN KEY (`changed_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+--
+-- Ograniczenia dla tabeli `admin_log`
+--
+ALTER TABLE `admin_log`
+  ADD CONSTRAINT `admin_log_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 --
 -- Ograniczenia dla tabeli `services`
