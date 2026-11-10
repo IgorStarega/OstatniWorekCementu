@@ -1,7 +1,8 @@
 # ERD — OstatniWorekCementu
 
 Aktualny diagram bazy danych (`budowlanka_rezerwacje`, MySQL 8.0, `utf8mb4_unicode_ci`).
-Obejmuje **13 tabel** i odpowiada plikowi `database/database-bez-rekordow.sql`.
+Obejmuje **13 tabel domenowych** i odpowiada plikowi `database/database-bez-rekordow.sql`.
+Tabela `schema_migrations` to tabela techniczna runnera migracji (`tools/migrate.php`) i nie jest częścią modelu domenowego.
 
 Diagram w formacie Mermaid renderuje się bezpośrednio na GitHubie. Wersją
 archiwalną z etapu 1 jest `ERD.jpg` (7 tabel) — nie jest już aktualna.
