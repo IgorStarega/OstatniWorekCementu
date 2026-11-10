@@ -17,6 +17,11 @@ RUN mkdir -p /var/log/php && chown www-data:www-data /var/log/php
 COPY --chown=www-data:www-data app/ /var/www/html/app/
 COPY --chown=www-data:www-data config/ /var/www/html/config/
 COPY --chown=www-data:www-data public/ /var/www/html/public/
+COPY --chown=www-data:www-data database/migrations/ /var/www/html/database/migrations/
+COPY --chown=www-data:www-data tools/migrate.php /var/www/html/tools/migrate.php
+COPY docker/php/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 WORKDIR /var/www/html
 

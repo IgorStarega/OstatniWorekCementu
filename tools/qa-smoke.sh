@@ -337,22 +337,34 @@ fi
 
 # --- 18. Schemat bazy ----------------------------------------------------
 TABLES_LIST=$(dbq "SHOW TABLES")
-TABLES=$(printf '%s\n' "$TABLES_LIST" | grep -c .)
 COLS=$(dbq "SHOW COLUMNS FROM users" | cut -f1)
-if [ "$TABLES" = "13" ] \
+MISSING_SCHEMA_TABLES=""
+for t in users service_categories services employees employee_services \
+         employee_availability employee_days_off reservations status_history \
+         admin_log password_resets email_verifications email_sends \
+         schema_migrations; do
+    if ! printf '%s\n' "$TABLES_LIST" | grep -qx "$t"; then
+        MISSING_SCHEMA_TABLES="$MISSING_SCHEMA_TABLES $t"
+    fi
+done
+
+if [ -z "$MISSING_SCHEMA_TABLES" ] \
     && printf '%s\n' "$COLS" | grep -q '^failed_attempts$' \
     && printf '%s\n' "$COLS" | grep -q '^locked_until$' \
     && printf '%s\n' "$COLS" | grep -q '^email_verified_at$'; then
-    pass "18. Schemat: 13 tabel + kolumny users"
+    pass "18. Schemat: 13 tabel domenowych + schema_migrations + kolumny users"
 else
-    fail "18. Schemat: 13 tabel + kolumny users" "tabele=$TABLES"
+    fail "18. Schemat: 13 tabel domenowych + schema_migrations + kolumny users" "brak:$MISSING_SCHEMA_TABLES"
 fi
 
-for t in status_history admin_log employee_days_off; do
-    if ! printf '%s\n' "$TABLES_LIST" | grep -qx "$t"; then
-        fail "18. schemat: brak tabeli $t" ""
-    fi
-done
+# --- 18b. schema_migrations zawiera wszystkie migracje z katalogu --------
+APPLIED_MIGS=$(dbq "SELECT version FROM schema_migrations ORDER BY version")
+EXPECTED_MIGS=$(ls database/migrations/*.sql | xargs -n1 basename | LC_ALL=C sort)
+if [ -n "$EXPECTED_MIGS" ] && [ "$APPLIED_MIGS" = "$EXPECTED_MIGS" ]; then
+    pass "18b. schema_migrations zawiera wszystkie migracje z katalogu"
+else
+    fail "18b. schema_migrations zawiera wszystkie migracje z katalogu" "w bazie: $(printf '%s' "$APPLIED_MIGS" | tr '\n' ' ')"
+fi
 
 # --- 19. Migracje idempotentne (002–007, dwa razy) -----------------------
 MIG_OUT="$TMP/mig.txt"

@@ -78,8 +78,9 @@ phpMyAdmin: `http://127.0.0.1:8084/` — za tunelem ustaw
 ## Sprawdzenie po starcie
 
 ```bash
+docker compose logs app | grep -i migrate
 docker compose exec db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE" -e "SHOW TABLES;"'
-# ma być 13 tabel
+# 13 tabel domenowych + schema_migrations (tabela techniczna)
 docker compose exec app php -r 'var_dump(getenv("DB_PASS"));'
 # ma zwrócić wartość, nie false
 ```
@@ -103,19 +104,20 @@ i ponownie wykonaj `docker compose pull && docker compose up -d`.
 ## Aktualizacja istniejącej bazy
 
 Nowy `database.sql` **nie** nadpisze istniejących danych — import działa tylko
-przy pustym `./data/mysql`. Dla działającej bazy zastosuj migracje po kolei:
+przy pustym `./data/mysql`. Obraz aplikacji zawiera katalog `database/migrations/`
+oraz runner `tools/migrate.php`, który uruchamia się **automatycznie przy każdym
+starcie kontenera `app`** (przed startem Apache) i aplikuje brakujące migracje.
+
+Sprawdzenie stanu migracji w logach i w kontenerze:
 
 ```bash
-docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < ../database/migrations/002-etap2.sql
-docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < ../database/migrations/003-etap2.sql
-docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < ../database/migrations/004-poprawka-kodowania.sql
-docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < ../database/migrations/005-historia-statusow.sql
-docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < ../database/migrations/006-log-administratora.sql
-docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < ../database/migrations/007-dni-wolne.sql
+docker compose logs app | grep -i migrate
+docker compose exec app php /var/www/html/tools/migrate.php --status
 ```
 
-Po migracjach `SHOW TABLES` ma zwrócić **13 tabel** (m.in. `status_history`,
-`admin_log` i `employee_days_off`).
+Po migracjach `SHOW TABLES` zwraca **13 tabel domenowych + `schema_migrations`**
+(m.in. `status_history`, `admin_log` i `employee_days_off`). Automat można
+wyłączyć zmienną środowiskową `RUN_MIGRATIONS=0`.
 
 Opis migracji i zasady regenerowania `database.sql` są w głównym `README.md`
 (sekcja „Aktualizacja istniejącej bazy”).

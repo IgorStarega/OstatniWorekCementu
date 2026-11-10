@@ -24,11 +24,14 @@ vendor/
 
 # Duże/zbędne w obrazie: dane bazy, zrzuty SQL, docs, motyw PMA, uploady, grafiki
 data/
-database/
+database/*
+!database/migrations/
+!database/migrations/**
 deploy/
 docs/
 themes/
-tools/
+tools/*
+!tools/migrate.php
 public/uploads/
 *.jpg
 *.md

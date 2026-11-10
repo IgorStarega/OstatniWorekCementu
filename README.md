@@ -100,7 +100,7 @@ Szczegółowa konfiguracja aplikacji znajduje się w katalogach:
 
 ## Baza danych
 
-System korzysta z relacyjnej bazy danych odpowiedzialnej za przechowywanie informacji związanych z użytkownikami, usługami oraz rezerwacjami. Schemat obejmuje **13 tabel**.
+System korzysta z relacyjnej bazy danych odpowiedzialnej za przechowywanie informacji związanych z użytkownikami, usługami oraz rezerwacjami. Schemat obejmuje **13 tabel domenowych + schema_migrations (tabela techniczna)**.
 
 Baza danych umożliwia między innymi przechowywanie:
 
@@ -230,6 +230,7 @@ Główna struktura repozytorium:
 > │   └── migrations/     # migracje dla istniejących baz (002–007)
 > ├── docker/             # obraz PHP, php.ini i konfiguracja Apache
 > │   └── php/
+> │       └── entrypoint.sh # automatyczne migracje przed startem Apache
 > ├── deploy/             # deploy produkcyjny z obrazu GHCR (compose + instrukcja)
 > ├── docs/               # dokumentacja (diagram ERD)
 > ├── public/             # publiczny katalog serwera (front controller)
@@ -237,6 +238,8 @@ Główna struktura repozytorium:
 > │   ├── fonts/          # lokalny font Oswald (licencja OFL)
 > │   ├── js/
 > │   └── vendor/         # lokalny Bootstrap 5.3 (CSS + JS, bez CDN)
+> ├── tools/              # narzędzia CLI (migrate.php, migrate.sh, qa-smoke.sh)
+> │   └── migrate.php     # runner migracji PDO (uruchamiany w entrypoint.sh)
 > ├── .env.example        # wzór konfiguracji lokalnej
 > ├── docker-compose.yml  # stos lokalny (app + db + phpMyAdmin)
 > ├── LICENSE
@@ -342,10 +345,12 @@ Obraz jest samodzielny — zawiera kod aplikacji, więc wdrożenie nie potrzebuj
 montowania repozytorium. **Gotowy plik deployu: `deploy/docker-compose.yml`
 (instrukcja w `deploy/README.md`).**
 
-> **Obraz nie zawiera `database/`.** `.dockerignore` celowo wyklucza ten katalog,
-> więc deploy **musi** dostarczyć `database.sql` osobno
-> (`cp ../database/database.sql ./database.sql` w katalogu `deploy/`) albo
-> zastosować migracje dla istniejącej bazy. Brak pliku kończy się utworzeniem
+> **Obraz nie zawiera zrzutu `database/database.sql`.** `.dockerignore` wyklucza
+> pełne zrzuty SQL, ale dołącza `database/migrations/` oraz `tools/migrate.php`.
+> Przy pierwszym uruchomieniu deploy **musi** dostarczyć `database.sql` osobno
+> (`cp ../database/database.sql ./database.sql` w katalogu `deploy/`), natomiast
+> kolejne migracje są aplikowane automatycznie przy starcie kontenera `app`.
+> Brak pliku `database.sql` przy pierwszym starcie kończy się utworzeniem
 > katalogu o tej nazwie i błędem `Can't initialize batch_readline`.
 
 `latest` publikuje się **po** smoke teście obrazu z MySQL, więc nie zawiera
@@ -384,19 +389,29 @@ zamiast pliku i błąd `Can't initialize batch_readline`. Aktualna wersja montuj
 ## Aktualizacja istniejącej bazy
 
 Skrypt `database/database.sql` jest importowany tylko przy **pustym** katalogu danych
-(`data/mysql`). Jeśli baza już istnieje, nowe kolumny i tabele z etapu 2 trzeba dołożyć
-jedną z dwóch ścieżek:
+(`data/mysql`). Dla istniejącej bazy migracje z `database/migrations/` **aplikują się
+automatycznie przy starcie kontenera `app`** (`docker/php/entrypoint.sh` uruchamia
+`php /var/www/html/tools/migrate.php` z pętlą retry przed startem Apache i zapisuje
+wykonane pliki w tabeli `schema_migrations`). Automat można wyłączyć zmienną
+środowiskową `RUN_MIGRATIONS=0`.
 
-**(a) Zachowujemy dane** — stosujemy migracje po kolei (stos musi działać).
+Dostępne są również dwie ścieżki ręczne:
 
-Najprościej jednym poleceniem:
+**(a) Zachowujemy dane (wariant ręczny na hoście z repozytorium)** — stosujemy migracje po kolei (stos musi działać):
 
 ```bash
 bash tools/migrate.sh
 ```
 
+lub bezpośrednio przez runner PHP w kontenerze:
+
+```bash
+docker compose exec app php /var/www/html/tools/migrate.php --status
+docker compose exec app php /var/www/html/tools/migrate.php
+```
+
 Skrypt stosuje wszystkie pliki z `database/migrations/` w kolejności. Te same
-migracje można też uruchomić ręcznie:
+migracje można też uruchomić ręcznie przez klienta `mysql`:
 
 `docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < database/migrations/002-etap2.sql`
 
@@ -419,7 +434,7 @@ dostępu po włączeniu weryfikacji e-mail. `004` naprawia podwójne kodowanie p
 w danych (`Ocieplanie budynkÃ³w` → `Ocieplanie budynków`); poprawione kolumny nie są ruszane
 przy kolejnym uruchomieniu. `005` dodaje historię zmian statusów rezerwacji (`status_history`),
 `006` — log operacji administratora (`admin_log`), a `007` — dni wolne i urlopy pracowników
-(`employee_days_off`). Po wszystkich migracjach baza ma **13 tabel**.
+(`employee_days_off`). Po wszystkich migracjach baza ma **13 tabel domenowych + schema_migrations (tabela techniczna)**.
 
 **(b) Dane są nieważne** — zaczynamy od zera:
 
