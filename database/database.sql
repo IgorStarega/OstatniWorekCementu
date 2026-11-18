@@ -778,6 +778,19 @@ VALUES
 
 -- =========================================
 -- REZERWACJE
+-- Daty liczone względem dnia importu (CURDATE()), żeby zawsze było
+-- coś "na dziś", "na jutro" i w przyszłości do testów procesu
+-- rezerwacji. Dobrane tak, by przy imporcie w środę każda data
+-- wypadała w dniu pracy danego pracownika, a end_time zawsze
+-- równało się start_time + duration_minutes usługi:
+--   * dziś (śr)        -> Jan (pon-pt),        usługa 1, 08:00-16:00
+--   * jutro (czw)      -> Piotr (pon-pt),      usługa 3, 09:00-13:00
+--   * +5 dni (pon)     -> Adam (pon/śr/pt),    usługa 5, 08:00-12:00
+--   * -1 dzień (wt)    -> Marek (wt-pt),       usługa 7, 07:00-15:00
+--   * +2 dni (pt)      -> Piotr,               usługa 4, 09:00-13:00
+-- Rezerwacja "+3 dni" wypadałaby w sobotę, w której żaden pracownik
+-- nie ma okna, dlatego anulowana jest na +2 (piątek) — i tak służy
+-- do testu, że status 'anulowana' nie blokuje terminu.
 -- =========================================
 
 INSERT INTO reservations
@@ -787,26 +800,26 @@ VALUES
 
 (
  5,
- 2,
- 3,
- 650.00,
- '2026-10-05',
- '09:00:00',
- '13:00:00',
+ 1,
+ 1,
+ 1200.00,
+ CURDATE(),
+ '08:00:00',
+ '16:00:00',
  'potwierdzona',
- 'Układanie płytek w łazience, około 12 m2.'
+ 'Murowanie ściany działowej.'
 ),
 
 (
  6,
- 1,
- 1,
- 1200.00,
- '2026-10-07',
- '08:00:00',
- '16:00:00',
+ 2,
+ 3,
+ 650.00,
+ DATE_ADD(CURDATE(), INTERVAL 1 DAY),
+ '09:00:00',
+ '13:00:00',
  'oczekująca',
- 'Murowanie ściany działowej.'
+ 'Układanie płytek w łazience, około 12 m2.'
 ),
 
 (
@@ -814,10 +827,10 @@ VALUES
  3,
  5,
  450.00,
- '2026-10-12',
+ DATE_ADD(CURDATE(), INTERVAL 5 DAY),
  '08:00:00',
  '12:00:00',
- 'potwierdzona',
+ 'oczekująca',
  'Malowanie salonu i przedpokoju.'
 ),
 
@@ -826,12 +839,36 @@ VALUES
  4,
  7,
  1800.00,
- '2026-10-15',
+ DATE_SUB(CURDATE(), INTERVAL 1 DAY),
  '07:00:00',
  '15:00:00',
- 'oczekująca',
+ 'zrealizowana',
  'Ocieplenie budynku jednorodzinnego.'
+),
+
+(
+ 5,
+ 2,
+ 4,
+ 500.00,
+ DATE_ADD(CURDATE(), INTERVAL 2 DAY),
+ '09:00:00',
+ '13:00:00',
+ 'anulowana',
+ 'Układanie paneli w pokoju — klient wycofał zamówienie.'
 );
+
+
+-- =========================================
+-- DNI WOLNE PRACOWNIKÓW
+-- =========================================
+
+-- Urlop Jana za tydzień (CURDATE() + 7): przy imporcie w środę jest to
+-- środa, czyli dzień, w którym Jan normalnie ma okno 08:00-16:00.
+-- Służy do testu, że dzień wolny blokuje wszystkie sloty tego dnia.
+INSERT INTO employee_days_off (employee_id, date, reason)
+VALUES
+(1, DATE_ADD(CURDATE(), INTERVAL 7 DAY), 'Urlop wypoczynkowy');
 
 
 -- =========================================
