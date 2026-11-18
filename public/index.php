@@ -38,6 +38,7 @@ require BASE_PATH . '/app/models/StatusHistory.php';
 require BASE_PATH . '/app/models/AdminLog.php';
 require BASE_PATH . '/app/models/Reservation.php';
 require BASE_PATH . '/app/models/Stats.php';
+require BASE_PATH . '/app/services/AvailabilityService.php';
 require BASE_PATH . '/app/controllers/HomeController.php';
 require BASE_PATH . '/app/controllers/AuthController.php';
 require BASE_PATH . '/app/controllers/PasswordResetController.php';
