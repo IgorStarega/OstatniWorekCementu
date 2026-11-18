@@ -36,6 +36,9 @@ $isAdminPage = strpos($currentPage, 'admin-') === 0;
                         <li class="nav-item">
                             <a class="nav-link<?= $currentPage === 'home' ? ' is-active' : '' ?>" href="/?page=home">Strona główna</a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link<?= in_array($currentPage, ['offer', 'service'], true) ? ' is-active' : '' ?>" href="/?page=offer">Oferta</a>
+                        </li>
                         <?php if (currentUserRole() === 'admin'): ?>
                             <li class="nav-item">
                                 <a class="nav-link<?= $isAdminPage ? ' is-active' : '' ?>" href="/?page=admin-dashboard">Panel administratora</a>
