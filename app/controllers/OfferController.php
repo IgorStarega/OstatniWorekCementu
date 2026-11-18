@@ -48,6 +48,10 @@ class OfferController
             return;
         }
 
+        // Wykonawcy usługi pokazywani pod przyciskiem rezerwacji —
+        // klient widzi od razu, kto może wykonać pracę.
+        $employeeList = (new Employee($pdo))->forService((int) $service['id']);
+
         $pageTitle = $service['name'];
         require BASE_PATH . '/app/views/layout/header.php';
         require BASE_PATH . '/app/views/offer/show.php';

@@ -181,6 +181,24 @@ class Employee
         $statement->execute(['id' => $employee['user_id']]);
     }
 
+    // Pracownicy wykonujący daną usługę (aktywny profil i aktywne konto).
+    // Jedno zapytanie z JOIN-em, żeby strona usługi nie robiła N+1
+    // (pojedyncze find() w pętli dla każdego pracownika).
+    public function forService(int $serviceId): array
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT e.id, e.description, u.first_name, u.last_name, u.phone
+             FROM employees e
+             JOIN users u ON u.id = e.user_id
+             JOIN employee_services es ON es.employee_id = e.id
+             WHERE es.service_id = :service_id AND e.is_active = 1 AND u.is_active = 1
+             ORDER BY u.last_name ASC, u.first_name ASC'
+        );
+        $statement->execute(['service_id' => $serviceId]);
+
+        return $statement->fetchAll();
+    }
+
     // Liczba rezerwacji pracownika — blokuje usunięcie.
     public function countReservations(int $employeeId): int
     {
