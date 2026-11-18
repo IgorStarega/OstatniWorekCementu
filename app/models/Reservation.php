@@ -169,6 +169,59 @@ class Reservation
         }
     }
 
+    // Czy nowa rezerwacja nakłada się na istniejącą rezerwację pracownika
+    // w danym dniu. UNIQUE w bazie łapie wyłącznie identyczny start_time —
+    // nakładanie się (np. 10:00-11:00 wobec 10:30-11:30) musi wykryć
+    // ta metoda, inaczej podwójna rezerwacja przejdzie przez bazę.
+    // Stykające się końce (09:00-10:00 i 10:00-11:00) NIE są konfliktem.
+    public function hasConflict(
+        int $employeeId,
+        string $date,
+        string $start,
+        string $end,
+        ?int $excludeId = null
+    ): bool {
+        // Kolumny są typu TIME, więc ujednolicamy format na H:i:s.
+        $start = self::normalizeTime($start);
+        $end = self::normalizeTime($end);
+
+        $sql = "SELECT COUNT(*) FROM reservations
+                WHERE employee_id = :employee_id
+                  AND reservation_date = :date
+                  AND status != 'anulowana'
+                  AND start_time < :new_end
+                  AND end_time > :new_start";
+
+        $params = [
+            'employee_id' => $employeeId,
+            'date'        => $date,
+            'new_start'   => $start,
+            'new_end'     => $end,
+        ];
+
+        // Przy edycji rezerwacja nie koliduje sama ze sobą.
+        if ($excludeId !== null) {
+            $sql .= ' AND id != :exclude_id';
+            $params['exclude_id'] = $excludeId;
+        }
+
+        $statement = $this->pdo->prepare($sql);
+        $statement->execute($params);
+
+        return (int) $statement->fetchColumn() > 0;
+    }
+
+    // 'H:i' albo 'H:i:s' -> zawsze 'H:i:s'; niepoprawna godzina -> bez zmian
+    // (zapytanie wtedy nic nie znajdzie, co jest bezpieczniejsze niż błąd).
+    private static function normalizeTime(string $time): string
+    {
+        if (preg_match('/^\d{2}:\d{2}$/', $time) === 1) {
+            return $time . ':00';
+        }
+
+        return $time;
+    }
+
     private function baseSelect(): string
     {
         return 'SELECT r.id, r.user_id, r.employee_id, r.service_id, r.final_price,
