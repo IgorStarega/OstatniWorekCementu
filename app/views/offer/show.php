@@ -22,23 +22,31 @@
         // więc gość trafia na logowanie, a zalogowany na razie wraca do oferty.
         $bookingHref = currentUserId() === null ? '/?page=login' : '/?page=offer';
         ?>
-        <a class="btn btn-primary" href="<?= htmlspecialchars($bookingHref, ENT_QUOTES, 'UTF-8') ?>">Zarezerwuj</a>
+        <?php if ($employeeList === []): ?>
+            <button type="button" class="btn btn-primary" disabled aria-disabled="true">Zarezerwuj</button>
+        <?php else: ?>
+            <a class="btn btn-primary" href="<?= htmlspecialchars($bookingHref, ENT_QUOTES, 'UTF-8') ?>">Zarezerwuj</a>
+        <?php endif; ?>
     </div>
 </div>
 
 <h3 class="h4 mt-4 mb-3">Wykonawcy usługi</h3>
-<ul class="list-group mb-4">
-    <?php foreach ($employeeList as $employee): ?>
-        <li class="list-group-item">
-            <strong>
-                <?= htmlspecialchars($employee['first_name'] . ' ' . $employee['last_name'], ENT_QUOTES, 'UTF-8') ?>
-            </strong>
-            <?php if ((string) $employee['description'] !== ''): ?>
-                — <?= htmlspecialchars($employee['description'], ENT_QUOTES, 'UTF-8') ?>
-            <?php endif; ?>
-        </li>
-    <?php endforeach; ?>
-</ul>
+<?php if ($employeeList === []): ?>
+    <p class="text-muted">Ta usługa nie ma obecnie dostępnego pracownika.</p>
+<?php else: ?>
+    <ul class="list-group mb-4">
+        <?php foreach ($employeeList as $employee): ?>
+            <li class="list-group-item">
+                <strong>
+                    <?= htmlspecialchars($employee['first_name'] . ' ' . $employee['last_name'], ENT_QUOTES, 'UTF-8') ?>
+                </strong>
+                <?php if ((string) $employee['description'] !== ''): ?>
+                    — <?= htmlspecialchars($employee['description'], ENT_QUOTES, 'UTF-8') ?>
+                <?php endif; ?>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+<?php endif; ?>
 
 <p>
     <a href="/?page=offer">&larr; Wróć do oferty</a>
