@@ -169,6 +169,139 @@ class Reservation
         }
     }
 
+    // Nowa rezerwacja klienta. Cała sekwencja w JEDNEJ transakcji, bo między
+    // odczytem ceny/usługi a INSERT-em ktoś może zmienić dane. Zwraca wynik
+    // zamiast rzucać wyjątkiem — kontroler pokazuje klientowi 'error',
+    // a szczegóły trafiają do error_log().
+    public function create(
+        int $userId,
+        int $serviceId,
+        int $employeeId,
+        string $date,
+        string $startTime,
+        string $comment
+    ): array {
+        try {
+            $this->pdo->beginTransaction();
+
+            // Cena i czas trwania zablokowane do końca transakcji (FOR UPDATE),
+            // żeby final_price pochodził z odczytu, który właśnie zatwierdzamy.
+            $statement = $this->pdo->prepare(
+                'SELECT duration_minutes, price, is_active FROM services
+                 WHERE id = :id FOR UPDATE'
+            );
+            $statement->execute(['id' => $serviceId]);
+            $service = $statement->fetch();
+
+            if ($service === false || (int) $service['is_active'] !== 1) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'id' => null, 'error' => 'Usługa jest niedostępna.'];
+            }
+
+            // Koniec rezerwacji liczy SERWER z czasu trwania usługi —
+            // formularz nigdy nie dostarcza end_time.
+            $endTime = (new DateTime($startTime))
+                ->modify('+' . (int) $service['duration_minutes'] . ' minutes')
+                ->format('H:i:s');
+
+            // Pracownik musi faktycznie wykonywać usługę i mieć aktywne
+            // konto — sprawdzamy w bazie, a nie tylko w formularzu.
+            $statement = $this->pdo->prepare(
+                'SELECT COUNT(*)
+                 FROM employee_services es
+                 JOIN employees e ON e.id = es.employee_id
+                 JOIN users u ON u.id = e.user_id
+                 WHERE es.employee_id = :employee_id
+                   AND es.service_id = :service_id
+                   AND e.is_active = 1
+                   AND u.is_active = 1'
+            );
+            $statement->execute([
+                'employee_id' => $employeeId,
+                'service_id'  => $serviceId,
+            ]);
+
+            if ((int) $statement->fetchColumn() === 0) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'id' => null, 'error' => 'Ten pracownik nie wykonuje wybranej usługi.'];
+            }
+
+            // Blokada wierszy rezerwacji pracownika z tego dnia: dwa równoległe
+            // zapisy nie przejdą obok kontroli konfliktów (wyścig na hasConflict).
+            $statement = $this->pdo->prepare(
+                'SELECT id FROM reservations
+                 WHERE employee_id = :employee_id AND reservation_date = :date
+                 FOR UPDATE'
+            );
+            $statement->execute([
+                'employee_id' => $employeeId,
+                'date'        => $date,
+            ]);
+
+            // Nakładanie się na istniejącą rezerwację — UNIQUE w bazie łapie
+            // tylko identyczny start, nakładanie wykrywa wyłącznie ta reguła.
+            if ($this->hasConflict($employeeId, $date, $startTime, $endTime)) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'id' => null, 'error' => 'Ten termin został właśnie zajęty. Wybierz inny.'];
+            }
+
+            // final_price zamrożony: zapisujemy cenę z chwili rezerwacji.
+            $statement = $this->pdo->prepare(
+                "INSERT INTO reservations
+                    (user_id, employee_id, service_id, final_price, reservation_date,
+                     start_time, end_time, status, comment)
+                 VALUES (:user_id, :employee_id, :service_id, :final_price, :date,
+                         :start_time, :end_time, 'oczekująca', :comment)"
+            );
+            $statement->execute([
+                'user_id'     => $userId,
+                'employee_id' => $employeeId,
+                'service_id'  => $serviceId,
+                'final_price' => $service['price'],
+                'date'        => $date,
+                'start_time'  => $startTime,
+                'end_time'    => $endTime,
+                'comment'    => $comment,
+            ]);
+            $reservationId = (int) $this->pdo->lastInsertId();
+
+            // Start historii na TYM SAMYM połączeniu: StatusHistory::record()
+            // celowo nie otwiera własnej transakcji (PDO nie ma zagnieżdżania),
+            // więc wpis trafi do bazy razem z rezerwacją.
+            (new StatusHistory($this->pdo))->record($reservationId, null, 'oczekująca', $userId);
+
+            $this->pdo->commit();
+
+            return ['ok' => true, 'id' => $reservationId, 'error' => null];
+        } catch (PDOException $exception) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+
+            // Szczegóły tylko do logu — klientowi komunikat bez SQLSTATE.
+            error_log('Reservation::create: ' . $exception->getMessage());
+
+            // Duplikat uq_employee_slot — identyczny start prześcignął nas
+            // między kontrolą konfliktów a INSERT-em.
+            if ($exception->getCode() === '23000') {
+                return ['ok' => false, 'id' => null, 'error' => 'Ten termin został właśnie zajęty. Wybierz inny.'];
+            }
+
+            return ['ok' => false, 'id' => null, 'error' => 'Nie udało się zapisać rezerwacji.'];
+        } catch (Throwable $exception) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+
+            error_log('Reservation::create: ' . $exception->getMessage());
+
+            return ['ok' => false, 'id' => null, 'error' => 'Nie udało się zapisać rezerwacji.'];
+        }
+    }
+
     // Czy nowa rezerwacja nakłada się na istniejącą rezerwację pracownika
     // w danym dniu. UNIQUE w bazie łapie wyłącznie identyczny start_time —
     // nakładanie się (np. 10:00-11:00 wobec 10:30-11:30) musi wykryć
