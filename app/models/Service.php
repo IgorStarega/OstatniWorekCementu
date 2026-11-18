@@ -40,6 +40,48 @@ class Service
         return $service ?: null;
     }
 
+    // Aktywne usługi dla oferty publicznej; opcjonalnie zawężone
+    // do jednej kategorii (filtr ?category=X na stronie oferty).
+    public function allActive(?int $categoryId = null): array
+    {
+        $sql = 'SELECT s.id, s.category_id, s.name, s.description, s.duration_minutes,
+                       s.price, c.name AS category_name
+                FROM services s
+                JOIN service_categories c ON c.id = s.category_id
+                WHERE s.is_active = 1';
+
+        $params = [];
+        if ($categoryId !== null) {
+            $sql .= ' AND s.category_id = :category_id';
+            $params['category_id'] = $categoryId;
+        }
+
+        $sql .= ' ORDER BY c.name ASC, s.name ASC';
+
+        $statement = $this->pdo->prepare($sql);
+        $statement->execute($params);
+
+        return $statement->fetchAll();
+    }
+
+    // Aktywna usługa po ID — nieaktywna (choćby istniała w bazie)
+    // dla klienta jest jakby jej nie było, więc zwracamy null.
+    public function findActive(int $id): ?array
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT s.id, s.category_id, s.name, s.description, s.duration_minutes,
+                    s.price, c.name AS category_name
+             FROM services s
+             JOIN service_categories c ON c.id = s.category_id
+             WHERE s.id = :id AND s.is_active = 1
+             LIMIT 1'
+        );
+        $statement->execute(['id' => $id]);
+        $service = $statement->fetch();
+
+        return $service ?: null;
+    }
+
     public function create(array $data): int
     {
         $statement = $this->pdo->prepare(
