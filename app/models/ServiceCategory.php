@@ -23,6 +23,22 @@ class ServiceCategory
         return $statement->fetchAll();
     }
 
+    // Kategorie, które mają co najmniej jedną aktywną usługę — kategoria
+    // bez niczego do zaoferowania nie powinna się pokazywać klientowi.
+    // Zwykły JOIN (nie LEFT): kategoria bez aktywnych usług wypada z listy.
+    public function allWithActiveServices(): array
+    {
+        $statement = $this->pdo->query(
+            'SELECT c.id, c.name, c.description, COUNT(s.id) AS services_count
+             FROM service_categories c
+             JOIN services s ON s.category_id = c.id AND s.is_active = 1
+             GROUP BY c.id, c.name, c.description
+             ORDER BY c.name ASC'
+        );
+
+        return $statement->fetchAll();
+    }
+
     public function find(int $id): ?array
     {
         $statement = $this->pdo->prepare(

@@ -22,6 +22,7 @@ require BASE_PATH . '/app/helpers/pagination.php';
 require BASE_PATH . '/app/helpers/url.php';
 require BASE_PATH . '/app/helpers/token.php';
 require BASE_PATH . '/app/helpers/schema.php';
+require BASE_PATH . '/app/helpers/format.php';
 require BASE_PATH . '/app/models/Database.php';
 require BASE_PATH . '/app/models/User.php';
 require BASE_PATH . '/app/models/PasswordReset.php';
@@ -44,6 +45,7 @@ require BASE_PATH . '/app/controllers/EmailVerificationController.php';
 require BASE_PATH . '/app/controllers/ProfileController.php';
 require BASE_PATH . '/app/controllers/DashboardController.php';
 require BASE_PATH . '/app/controllers/AdminController.php';
+require BASE_PATH . '/app/controllers/OfferController.php';
 
 // Nieobsłużony wyjątek: zapisujemy szczegóły do logu, a użytkownik widzi
 // neutralny widok 500 (bez ścieżek, numerów linii i stack trace).
@@ -94,6 +96,14 @@ if (!is_string($page)) {
 switch ($page) {
     case 'home':
         (new HomeController())->index($config);
+        break;
+
+    case 'offer':
+        (new OfferController($config))->index();
+        break;
+
+    case 'service':
+        (new OfferController($config))->show((int)($_GET['id'] ?? 0));
         break;
 
     case 'login':
