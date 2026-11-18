@@ -321,6 +321,15 @@ phpMyAdmin oraz ustawienia portów (`BIND_ADDR`). Strefa czasowa jest stała
 Przy pierwszym starcie kontener `owc-db` importuje `database/database.sql`
 (struktura + dane testowe). Hasło wszystkich kont testowych to `Haslo123!`.
 
+Rezerwacje oraz dzień wolny mają daty liczone względem dnia importu
+(`CURDATE()` plus stały odstęp w dniach), więc zawsze istnieją rezerwacje
+„na dziś", „na jutro", przyszła, zrealizowana (wczoraj) i anulowana.
+Godziny dobrane są do okien pracowników tak, by przy imporcie w środę
+każda rezerwacja wypadała w dniu pracy wyznaczonego pracownika
+(a `end_time` = `start_time` + czas trwania usługi). Rezerwacja anulowana
+służy do testu, że status `anulowana` nie blokuje terminu, a urlop
+(+7 dni) — że dzień wolny blokuje wszystkie sloty danego dnia.
+
 ---
 
 ## Obraz Docker (GHCR)
