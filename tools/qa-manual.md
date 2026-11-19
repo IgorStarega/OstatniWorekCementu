@@ -57,6 +57,23 @@ Adres: <http://localhost:8082/>
 - [ ] **Paginacja** — jeśli lista ma >20 pozycji, przejdź na stronę 2,
       sprawdź czy filtry się zachowały.
 
+## Rezerwacje i panele
+
+- [ ] **Ścieżka klienta** — oferta → usługa → pracownik → data → godzina → potwierdzenie
+      → zapis; po zapisie widać komunikat z numerem i listę „Moje rezerwacje".
+- [ ] **Bramka kroków** — ręczne `?page=booking&step=confirm` bez wcześniejszych wyborów
+      przekierowuje na brakujący krok i nie tworzy rezerwacji.
+- [ ] **Moje rezerwacje** — sekcje nadchodzące/historia, badge statusów, szczegóły
+      z historią zmian i przyciskiem anulowania tylko dla przyszłej wizyty.
+- [ ] **Anulowanie** — przyszła wizyta anulowana przez POST; przeszła lub już anulowana
+      jest odrzucana komunikatem serwera, a nie tylko ukryciem przycisku.
+- [ ] **Panel pracownika** — sekcje dziś/przyszłe/historia, potwierdzenie, realizacja
+      i anulowanie oczekującej wizyty.
+- [ ] **Cudze ID** — `?page=reservation&id=<cudze>` daje 404; POST zmiany statusu
+      cudzej wizyty daje 403 i nie zmienia bazy.
+- [ ] **Telefon 375 px** — booking, „Moje rezerwacje" i panel pracownika bez poziomego
+      przewijania; przyciski mają min. 44 px, empty states są czytelne.
+
 ## Responsywność
 
 - [ ] **Telefon (≈375 px)** — brak poziomego przewijania, przyciski nie uciskają się,

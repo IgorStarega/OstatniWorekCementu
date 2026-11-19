@@ -39,6 +39,15 @@ $isAdminPage = strpos($currentPage, 'admin-') === 0;
                         <li class="nav-item">
                             <a class="nav-link<?= in_array($currentPage, ['offer', 'service'], true) ? ' is-active' : '' ?>" href="/?page=offer">Oferta</a>
                         </li>
+                        <?php if (currentUserRole() === 'klient'): ?>
+                            <li class="nav-item">
+                                <a class="nav-link<?= $currentPage === 'my-reservations' || $currentPage === 'reservation' ? ' is-active' : '' ?>" href="/?page=my-reservations">Moje rezerwacje</a>
+                            </li>
+                        <?php elseif (currentUserRole() === 'pracownik'): ?>
+                            <li class="nav-item">
+                                <a class="nav-link<?= $currentPage === 'dashboard' ? ' is-active' : '' ?>" href="/?page=dashboard">Panel pracownika</a>
+                            </li>
+                        <?php endif; ?>
                         <?php if (currentUserRole() === 'admin'): ?>
                             <li class="nav-item">
                                 <a class="nav-link<?= $isAdminPage ? ' is-active' : '' ?>" href="/?page=admin-dashboard">Panel administratora</a>
@@ -71,3 +80,11 @@ $isAdminPage = strpos($currentPage, 'admin-') === 0;
         </nav>
     </header>
     <main class="site-main <?= htmlspecialchars($pageClass ?? '', ENT_QUOTES, 'UTF-8') ?>">
+        <?php $globalFlash = function_exists('flash_pull') ? flash_pull() : null; ?>
+        <?php if ($globalFlash !== null): ?>
+            <?php $flashRole = $globalFlash['type'] === 'status' ? 'status' : 'alert'; ?>
+            <p role="<?= htmlspecialchars($flashRole, ENT_QUOTES, 'UTF-8') ?>"
+               class="alert <?= $flashRole === 'status' ? 'alert-success' : 'alert-danger' ?> mb-4">
+                <?= htmlspecialchars($globalFlash['message'], ENT_QUOTES, 'UTF-8') ?>
+            </p>
+        <?php endif; ?>
