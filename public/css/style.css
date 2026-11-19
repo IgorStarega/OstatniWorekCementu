@@ -1095,6 +1095,10 @@ button:not(.btn):not(.navbar-toggler):active {
     max-width: 860px;
 }
 
+.site-main.dashboard-main {
+    max-width: 1320px;
+}
+
 .booking-steps {
     display: flex;
     flex-wrap: wrap;
