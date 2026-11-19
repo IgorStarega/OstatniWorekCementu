@@ -1363,3 +1363,96 @@ button:not(.btn):not(.navbar-toggler):active {
         flex-basis: 42%;
     }
 }
+
+/* --- Kalendarz miesiąca w kroku daty ----------------------------------- */
+.calendar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.calendar {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+.calendar th {
+    padding: 0.5rem 0.25rem;
+    color: var(--tekst-mut);
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.calendar td {
+    padding: 2px;
+    border: 1px solid var(--stal-1);
+    vertical-align: top;
+}
+
+.calendar-cell {
+    min-height: 44px;
+    height: 64px;
+}
+
+.calendar-cell.is-today {
+    border-color: var(--akcent);
+}
+
+.calendar-day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    height: 100%;
+    min-height: 44px;
+    padding: 0.35rem 0.2rem;
+    border: 1px solid transparent;
+    border-radius: var(--promien);
+    color: var(--tekst);
+    text-decoration: none;
+}
+
+.calendar-day.is-free:hover,
+.calendar-day.is-free:focus {
+    border-color: var(--akcent);
+    background: var(--tlo-3);
+}
+
+.calendar-day.is-past,
+.calendar-day.is-off,
+.calendar-day.is-full {
+    color: var(--tekst-mut);
+    background: var(--tlo-1);
+    opacity: 0.7;
+}
+
+.calendar-day.is-empty {
+    background: transparent;
+}
+
+.calendar-day-number {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    line-height: 1.1;
+}
+
+@media (max-width: 575.98px) {
+    .calendar th {
+        font-size: 0.65rem;
+    }
+
+    .calendar-day {
+        min-height: 44px;
+        padding: 0.25rem 0.1rem;
+    }
+
+    .calendar-day .badge {
+        font-size: 0.6rem;
+    }
+}
