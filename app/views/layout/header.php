@@ -71,3 +71,14 @@ $isAdminPage = strpos($currentPage, 'admin-') === 0;
         </nav>
     </header>
     <main class="site-main <?= htmlspecialchars($pageClass ?? '', ENT_QUOTES, 'UTF-8') ?>">
+        <?php
+        // Osobna nazwa zmiennej, żeby nie nadpisać $flash używanego przez layout admina.
+        $globalFlash = flash_pull();
+        ?>
+        <?php if ($globalFlash !== null): ?>
+            <div class="container-xxl">
+                <p role="<?= htmlspecialchars($globalFlash['type'], ENT_QUOTES, 'UTF-8') ?>" class="mb-3">
+                    <?= htmlspecialchars($globalFlash['message'], ENT_QUOTES, 'UTF-8') ?>
+                </p>
+            </div>
+        <?php endif; ?>
