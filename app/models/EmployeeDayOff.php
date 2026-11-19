@@ -9,6 +9,22 @@ class EmployeeDayOff
         $this->pdo = $pdo;
     }
 
+    // Czy pracownik ma dzień wolny w danym dniu? Jedna implementacja dla
+    // AvailabilityService, procesu rezerwacji i podglądu dni wolnych.
+    public function isDayOff(int $employeeId, string $date): bool
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM employee_days_off
+             WHERE employee_id = :employee_id AND date = :date'
+        );
+        $statement->execute([
+            'employee_id' => $employeeId,
+            'date'        => $date,
+        ]);
+
+        return (int) $statement->fetchColumn() > 0;
+    }
+
     public function forEmployee(int $employeeId): array
     {
         $statement = $this->pdo->prepare(

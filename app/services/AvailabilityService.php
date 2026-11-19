@@ -50,7 +50,7 @@ class AvailabilityService
         }
 
         // Urlop/dzień wolny blokuje cały dzień, niezależnie od okna.
-        if ((new EmployeeAvailability($this->pdo))->isDayOff($employeeId, $date)) {
+        if ((new EmployeeDayOff($this->pdo))->isDayOff($employeeId, $date)) {
             return [];
         }
 

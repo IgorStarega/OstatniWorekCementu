@@ -5,17 +5,19 @@ if (form) {
     const password = document.querySelector('#password');
     const confirmation = document.querySelector('#password_confirmation');
 
-    function checkPasswords() {
-        if (password.value !== confirmation.value) {
-            confirmation.setCustomValidity('Hasła muszą być takie same.');
-        } else {
-            confirmation.setCustomValidity('');
+    if (password && confirmation) {
+        function checkPasswords() {
+            if (password.value !== confirmation.value) {
+                confirmation.setCustomValidity('Hasła muszą być takie same.');
+            } else {
+                confirmation.setCustomValidity('');
+            }
         }
-    }
 
-    password.addEventListener('input', checkPasswords);
-    confirmation.addEventListener('input', checkPasswords);
-    form.addEventListener('submit', checkPasswords);
+        password.addEventListener('input', checkPasswords);
+        confirmation.addEventListener('input', checkPasswords);
+        form.addEventListener('submit', checkPasswords);
+    }
 }
 
 // Potwierdzenie akcji destrukcyjnych (np. usunięcia kategorii) bez inline'owego JS.

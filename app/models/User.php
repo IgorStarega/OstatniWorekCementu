@@ -94,87 +94,87 @@ class User
     }
 
     // Zmiana roli — whitelist ['klient','pracownik','admin'].
-// Utrzymujemy spójność users ↔ employees.
-// Profil pracownika przy zmianie roli jest dezaktywowany,
-// a nie usuwany, aby zachować powiązane dane historyczne.
-public function updateRole(int $id, string $role): bool
-{
-    if (!in_array($role, self::ROLES, true)) {
-        return false;
-    }
+    // Utrzymujemy spójność users ↔ employees.
+    // Profil pracownika przy zmianie roli jest dezaktywowany,
+    // a nie usuwany, aby zachować powiązane dane historyczne.
+    public function updateRole(int $id, string $role): bool
+    {
+        if (!in_array($role, self::ROLES, true)) {
+            return false;
+        }
 
-    $current = $this->findById($id);
+        $current = $this->findById($id);
 
-    if ($current === null) {
-        return false;
-    }
+        if ($current === null) {
+            return false;
+        }
 
-    $this->pdo->beginTransaction();
+        $this->pdo->beginTransaction();
 
-    try {
-        $statement = $this->pdo->prepare(
-            'UPDATE users SET role = :role WHERE id = :id'
-        );
-
-        $statement->execute([
-            'role' => $role,
-            'id'   => $id,
-        ]);
-
-        if ($role === 'pracownik') {
-            // Utworzenie brakującego profilu pracownika.
+        try {
             $statement = $this->pdo->prepare(
-                'SELECT id FROM employees WHERE user_id = :user_id LIMIT 1'
+                'UPDATE users SET role = :role WHERE id = :id'
             );
 
-            $statement->execute(['user_id' => $id]);
-            $employeeId = $statement->fetchColumn();
+            $statement->execute([
+                'role' => $role,
+                'id'   => $id,
+            ]);
 
-            if ($employeeId === false) {
+            if ($role === 'pracownik') {
+                // Utworzenie brakującego profilu pracownika.
                 $statement = $this->pdo->prepare(
-                    'INSERT INTO employees (user_id, description, is_active)
-                     VALUES (:user_id, NULL, :is_active)'
+                    'SELECT id FROM employees WHERE user_id = :user_id LIMIT 1'
                 );
 
-                $statement->execute([
-                    'user_id'   => $id,
-                    'is_active' => (int) $current['is_active'],
-                ]);
-            } else {
-                // Synchronizacja aktywności istniejącego profilu.
+                $statement->execute(['user_id' => $id]);
+                $employeeId = $statement->fetchColumn();
+
+                if ($employeeId === false) {
+                    $statement = $this->pdo->prepare(
+                        'INSERT INTO employees (user_id, description, is_active)
+                         VALUES (:user_id, NULL, :is_active)'
+                    );
+
+                    $statement->execute([
+                        'user_id'   => $id,
+                        'is_active' => (int) $current['is_active'],
+                    ]);
+                } else {
+                    // Synchronizacja aktywności istniejącego profilu.
+                    $statement = $this->pdo->prepare(
+                        'UPDATE employees
+                         SET is_active = :is_active
+                         WHERE id = :id'
+                    );
+
+                    $statement->execute([
+                        'is_active' => (int) $current['is_active'],
+                        'id'        => (int) $employeeId,
+                    ]);
+                }
+            } elseif ($current['role'] === 'pracownik') {
+                // Zachowujemy profil, dni wolne i historię.
                 $statement = $this->pdo->prepare(
                     'UPDATE employees
-                     SET is_active = :is_active
-                     WHERE id = :id'
+                     SET is_active = 0
+                     WHERE user_id = :user_id'
                 );
 
-                $statement->execute([
-                    'is_active' => (int) $current['is_active'],
-                    'id'        => (int) $employeeId,
-                ]);
+                $statement->execute(['user_id' => $id]);
             }
-        } elseif ($current['role'] === 'pracownik') {
-            // Zachowujemy profil, dni wolne i historię.
-            $statement = $this->pdo->prepare(
-                'UPDATE employees
-                 SET is_active = 0
-                 WHERE user_id = :user_id'
-            );
 
-            $statement->execute(['user_id' => $id]);
+            $this->pdo->commit();
+
+            return true;
+        } catch (Throwable $exception) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+
+            throw $exception;
         }
-
-        $this->pdo->commit();
-
-        return true;
-    } catch (Throwable $exception) {
-        if ($this->pdo->inTransaction()) {
-            $this->pdo->rollBack();
-        }
-
-        throw $exception;
     }
-}
 
     // Zmiana aktywności użytkownika synchronizuje profil tylko wtedy,
     // gdy konto nadal ma rolę pracownika. Stary profil po zmianie roli
