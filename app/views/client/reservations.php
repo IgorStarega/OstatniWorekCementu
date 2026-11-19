@@ -46,7 +46,7 @@ $statusClasses = [
                                 </span>
                             </td>
                             <td>
-                                <a class="btn btn-outline-light btn-sm" href="/?page=reservation&amp;id=<?= (int) $row['id'] ?>">Szczegóły</a>
+                                <a class="btn btn-outline-light btn-sm" style="min-height:44px" href="/?page=reservation&amp;id=<?= (int) $row['id'] ?>">Szczegóły</a>
                                 <form method="post" action="/?page=reservation" class="d-inline">
                                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
                                     <input type="hidden" name="action" value="cancel">
@@ -99,7 +99,7 @@ $statusClasses = [
                                 </span>
                             </td>
                             <td>
-                                <a class="btn btn-outline-light btn-sm" href="/?page=reservation&amp;id=<?= (int) $row['id'] ?>">Szczegóły</a>
+                                <a class="btn btn-outline-light btn-sm" style="min-height:44px" href="/?page=reservation&amp;id=<?= (int) $row['id'] ?>">Szczegóły</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>

@@ -11,7 +11,7 @@
     <div class="alert alert-warning" role="alert">
         Brak wolnych terminów w tym dniu, wybierz inny.
     </div>
-    <a class="btn btn-outline-light mb-3" href="/?page=booking&amp;step=date">Wybierz inną datę</a>
+    <a class="btn btn-outline-light mb-3" style="min-height:44px" href="/?page=booking&amp;step=date">Wybierz inną datę</a>
 <?php else: ?>
     <?php if (count($slots) === 1): ?>
         <div class="alert alert-info" role="status">

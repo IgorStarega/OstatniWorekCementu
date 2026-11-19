@@ -9,7 +9,7 @@
     <div class="alert alert-warning" role="alert">
         Ta usługa nie ma obecnie dostępnego pracownika.
     </div>
-    <a class="btn btn-outline-light" href="/?page=booking&amp;step=service">Wybierz inną usługę</a>
+    <a class="btn btn-outline-light" style="min-height:44px" href="/?page=booking&amp;step=service">Wybierz inną usługę</a>
 <?php else: ?>
     <form method="post" action="/?page=booking&amp;step=employee">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>">

@@ -1088,3 +1088,30 @@ button:not(.btn):not(.navbar-toggler):active {
         align-items: flex-start;
     }
 }
+
+/* --- Proces rezerwacji: wskaźnik kroków --------------------------------- */
+
+.booking-step {
+    padding: 0.35rem 0.6rem;
+    background: #101316;
+    border: 1px solid var(--stal-2);
+    border-radius: 2px;
+    font-family: var(--font-display);
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.booking-step a {
+    text-decoration: none;
+}
+
+.booking-step .is-active {
+    color: var(--akcent);
+}
+
+@media (max-width: 575.98px) {
+    .booking-step {
+        flex: 1 1 auto;
+    }
+}

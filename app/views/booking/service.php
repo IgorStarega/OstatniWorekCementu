@@ -5,7 +5,7 @@
 
 <?php if ($services === []): ?>
     <p>Na razie nie ma żadnych aktywnych usług.</p>
-    <a class="btn btn-outline-light" href="/?page=offer">Wróć do oferty</a>
+    <a class="btn btn-outline-light" style="min-height:44px" href="/?page=offer">Wróć do oferty</a>
 <?php else: ?>
     <?php foreach ($services as $service): ?>
         <div class="card mb-3">

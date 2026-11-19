@@ -73,7 +73,7 @@ $badgeClass = $statusClasses[$reservation['status']] ?? 'text-bg-secondary';
 <?php endif; ?>
 
 <div class="d-flex flex-wrap gap-2">
-    <a class="btn btn-outline-light" href="/?page=my-reservations">Wróć do rezerwacji</a>
+    <a class="btn btn-outline-light" style="min-height:44px" href="/?page=my-reservations">Wróć do rezerwacji</a>
 
     <?php if ($canCancel): ?>
         <form method="post" action="/?page=reservation">

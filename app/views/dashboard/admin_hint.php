@@ -6,6 +6,6 @@
         <p class="card-text">
             Masz uprawnienia administratora. Rezerwacjami zarządzasz w panelu administratora.
         </p>
-        <a class="btn btn-primary" href="/?page=admin-dashboard">Przejdź do panelu administratora</a>
+        <a class="btn btn-primary" style="min-height:44px" href="/?page=admin-dashboard">Przejdź do panelu administratora</a>
     </div>
 </div>

@@ -4,4 +4,4 @@
     Twoje konto nie ma profilu pracownika. Skontaktuj się z administratorem.
 </div>
 
-<a class="btn btn-outline-light" href="/?page=home">Wróć na stronę główną</a>
+<a class="btn btn-outline-light" style="min-height:44px" href="/?page=home">Wróć na stronę główną</a>
