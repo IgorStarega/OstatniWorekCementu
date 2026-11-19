@@ -66,6 +66,12 @@ get_csrf() {
 alerts() { grep -oP '<p role="alert">\K[^<]*' "$TMP/body" | tr '\n' '|'; }
 
 cleanup() {
+    # Rezerwacja #2 jest używana przez testy 24c/24d. Bez przywrócenia
+    # zostawała "zrealizowana" na dzień w przyszłości.
+    dbq "UPDATE reservations SET status = 'oczekująca' WHERE id = 2" >/dev/null 2>&1
+    dbq "DELETE FROM status_history WHERE reservation_id = 2" >/dev/null 2>&1
+    dbq "INSERT INTO status_history (reservation_id, old_status, new_status, changed_by, changed_at)
+         SELECT id, NULL, status, 7, created_at FROM reservations WHERE id = 2" >/dev/null 2>&1
     # Rezerwacje założone przez testy etapu 4 (gdyby regresja dopuściła zapis).
     dbq "DELETE FROM reservations WHERE comment = 'QA smoke'" >/dev/null 2>&1
     if [ -n "$SMOKE_EMAIL" ]; then
