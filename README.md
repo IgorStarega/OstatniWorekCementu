@@ -770,7 +770,7 @@ Projekt jest rozwijany w ramach prac nad systemem rezerwacji usług budowlanych.
 | 6 | Ochrona IDOR (404 dla cudzych ID) i CSRF wszystkich POST | ukończone |
 | 7 | Testy 45–55 w `tools/qa-smoke.sh` + `test-conflicts.php` + `check-slots.php` | ukończone |
 | 8 | Dokumentacja procesu, reguły konfliktów i algorytmu dostępności | ukończone |
-| 9 | UX/responsywność 375 px (#99) | w toku — patrz punkt 11 |
+| 9 | UX/responsywność 375 px (#99) | ukończone (CSS, empty states, przyciski 44 px; checklista manualna) |
 | 10 | AJAX z terminami | nie zrealizowane (poza zakresem etapu 4) |
 
 ### Etap 3 — panel administratora

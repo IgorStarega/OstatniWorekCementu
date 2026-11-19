@@ -31,6 +31,7 @@ class ClientController
         }
 
         $pageTitle = 'Moje rezerwacje';
+        $pageClass = 'client-main';
         require BASE_PATH . '/app/views/layout/header.php';
         require BASE_PATH . '/app/views/client/reservations.php';
         require BASE_PATH . '/app/views/layout/footer.php';
@@ -58,6 +59,7 @@ class ClientController
         $canCancel = $this->canCancel($reservation);
 
         $pageTitle = 'Rezerwacja #' . (int) $reservation['id'];
+        $pageClass = 'client-main';
         require BASE_PATH . '/app/views/layout/header.php';
         require BASE_PATH . '/app/views/client/reservation.php';
         require BASE_PATH . '/app/views/layout/footer.php';

@@ -1300,3 +1300,66 @@ button:not(.btn):not(.navbar-toggler):active {
         grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
     }
 }
+
+/* --- UX paneli klienta i pracownika (#99) ------------------------------- */
+
+.site-main {
+    min-width: 0;
+}
+
+.site-main.client-main {
+    max-width: 1320px;
+}
+
+.booking-main .btn,
+.client-main .btn,
+.dashboard-main .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+}
+
+.booking-main .btn-sm,
+.client-main .btn-sm,
+.dashboard-main .btn-sm {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+}
+
+.booking-main h2,
+.booking-main h3,
+.client-main h2,
+.client-main h3,
+.dashboard-main h2,
+.dashboard-main h3 {
+    overflow-wrap: anywhere;
+}
+
+.booking-step-label {
+    white-space: normal;
+}
+
+.admin-table-wrap td,
+.admin-table-wrap th {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 575.98px) {
+    .booking-step {
+        flex: 1 1 auto;
+    }
+
+    .booking-step-label {
+        font-size: 0.68rem;
+    }
+
+    .admin-table-wrap td {
+        gap: 0.75rem;
+    }
+
+    .admin-table-wrap td::before {
+        flex-basis: 42%;
+    }
+}
