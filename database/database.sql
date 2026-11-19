@@ -803,10 +803,10 @@ VALUES
  1,
  1,
  1200.00,
- CURDATE(),
+ DATE_SUB(CURDATE(), INTERVAL 1 DAY),
  '08:00:00',
  '16:00:00',
- 'potwierdzona',
+ 'zrealizowana',
  'Murowanie ściany działowej.'
 ),
 
