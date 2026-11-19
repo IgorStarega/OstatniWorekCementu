@@ -41,6 +41,25 @@ class Employee
         return $employee ?: null;
     }
 
+    // Profil pracownika po ID KONTA użytkownika (users.id).
+    // Sesja trzyma users.id, a rezerwacje employees.id — to jest źródło
+    // najczęstszego błędu w panelu pracownika, dlatego mapowanie ma własną metodę.
+    public function findByUserId(int $userId): ?array
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT e.id, e.user_id, e.description, e.is_active,
+                    u.first_name, u.last_name, u.email, u.phone
+             FROM employees e
+             JOIN users u ON u.id = e.user_id
+             WHERE e.user_id = :user_id
+             LIMIT 1'
+        );
+        $statement->execute(['user_id' => $userId]);
+        $employee = $statement->fetch();
+
+        return $employee ?: null;
+    }
+
     // Tworzy konto i profil pracownika w jednej transakcji.
     // Bez transakcji błąd drugiego INSERT-a zostawiłby konto bez profilu.
     public function createWithUser(array $user, string $description): int
