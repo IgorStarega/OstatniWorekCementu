@@ -9,6 +9,7 @@ System internetowy do obsługi firmy budowlanej oraz rezerwacji usług budowlany
 * [Technologie](#technologie)
 * [Baza danych](#baza-danych)
 * [Dostępność pracowników](#dostępność-pracowników)
+* [Proces rezerwacji](#proces-rezerwacji)
 * [Role użytkowników](#role-użytkowników)
 * [Dane testowe (Logowanie)](#dane-testowe-logowanie)
 * [Zakres projektu](#zakres-projektu)
@@ -129,8 +130,85 @@ ostro mniejsze niż `end_time`. Etap 4 (proces rezerwacji) wyznacza wolne termin
 na podstawie tych okien i `services.duration_minutes`.
 
 Dni wolne i urlopy są przechowywane w `employee_days_off` (jeden wpis na pracownika
-i dzień, `UNIQUE uq_employee_date`) i obsługiwane w panelu administratora. Metoda
-`EmployeeAvailability::isDayOff()` jest gotowa dla procesu rezerwacji w etapie 4.
+i dzień, `UNIQUE uq_employee_date`) i obsługiwane w panelu administratora.
+
+### Algorytm dostępności
+
+`AvailabilityService::slotsFor()` wyznacza wolne terminy dla pary pracownik + usługa:
+
+1. data musi przejść round-trip `DateTime::createFromFormat('Y-m-d')` i być nie wcześniejsza niż dziś,
+2. okno pracy pochodzi z `employee_availability` dla `day_of_week` (1 = poniedziałek, 7 = niedziela); brak wiersza = brak slotów,
+3. urlop lub dzień wolny z `employee_days_off` blokuje cały dzień,
+4. usługa musi być aktywna (`is_active = 1`),
+5. rezerwacje pracownika z tego dnia o statusie innym niż `anulowana` są zajęte,
+6. kandydaci startują co 15 minut i muszą spełnić `start + duration_minutes <= koniec okna`,
+7. dla dzisiejszego dnia sloty z minioną godziną startu są odfiltrowane.
+
+**Usługa 480 min przy oknie 8:00–16:00 ma dokładnie jeden slot — 8:00. To celowe, nie błąd.**
+
+### Reguła konfliktów
+
+`Reservation::hasConflict()` uznaje nakładanie, gdy zachodzi jednocześnie
+`start_time < :new_end AND end_time > :new_start`, a istniejąca rezerwacja nie ma
+statusu `anulowana`. Dla pary 10:00–11:00 daje to 5 blokad i 2 dopuszczenia:
+
+| Przypadek | Wynik |
+|---|---|
+| 09:30–10:30 | blokada |
+| 10:00–11:00 (identyczny przedział) | blokada |
+| 10:15–10:45 (w środku) | blokada |
+| 10:30–11:30 | blokada |
+| 09:30–11:30 (obejmuje całość) | blokada |
+| 09:00–10:00 (koniec = start) | dopuszczenie |
+| 11:00–12:00 (start = koniec) | dopuszczenie |
+
+Te same etykiety są w `tools/test-conflicts.php` (8/8 PASS, w tym `excludeId`).
+`UNIQUE uq_employee_slot` obejmuje tylko `(employee_id, reservation_date, start_time)` —
+**bez `end_time`** — więc rezerwacja 10:00 i 10:30 przejdzie przez indeks. Jedyną
+obroną przed nakładaniem jest `hasConflict()` wywoływane w transakcji `create()`,
+z blokadą wierszy pracownika z danego dnia (`FOR UPDATE`).
+
+### Ochrona IDOR
+
+Panel klienta używa wyłącznie `forUser()`, `findForUser()` i `cancel()`.
+`Reservation::find()` pozostaje dla administratora. Cudze ID rezerwacji w panelu
+klienta kończy się **404** (nie 403), a POST anulowania cudzej rezerwacji nie zmienia
+bazy. Anulowanie jest zmianą statusu na `anulowana`, nigdy `DELETE`.
+
+---
+
+## Proces rezerwacji
+
+Ścieżka: **oferta → usługa → pracownik → data → godzina → potwierdzenie → zapis**.
+Rezerwację składa wyłącznie rola `klient`; pracownik i administrator widzą w ofercie
+nieaktywny przycisk.
+
+Stan kroku jest w `$_SESSION['booking']` (`service_id`, `employee_id`, `date`,
+`start_time`, `comment`). Bramka kolejności działa przed renderem: krok `employee`
+wymaga usługi, `date` — usługi i pracownika, `time` — dodatkowo daty, a `confirm`
+— godziny. Ręczne `?page=booking&step=confirm` bez stanu przekierowuje na pierwszy
+brakujący krok i **niczego nie zapisuje**. „Wstecz” czyści właściwy klucz i wszystkie
+późniejsze.
+
+Każdy krok jest walidowany po stronie serwera:
+
+* **usługa** — `Service::findActive()`, nieaktywna lub nieistniejąca jest odrzucana,
+* **pracownik** — `Employee::forService()` i sprawdzenie ID na liście; podmiana
+  `employee_id` w DevTools na osobę nieprzypisaną do usługi jest odrzucana,
+* **data** — format `Y-m-d` z round-tripem i data nie wcześniejsza niż dziś;
+  `slotsFor()` musi zwrócić niepustą listę,
+* **godzina** — wartość musi być dokładnie jedną z listy `slotsFor()`; brak własnej
+  arytmetyki godzin,
+* **potwierdzenie** — ponowne sprawdzenie usługi, pracownika i slotu, potem
+  `Reservation::create()` w jednej transakcji. Zajęty termin kończy się komunikatem
+  i powrotem do wyboru godziny.
+
+Po zapisie klient trafia na `?page=my-reservations` z komunikatem zawierającym numer
+rezerwacji. Panel klienta dzieli listę na nadchodzące i historię, pokazuje szczegóły
+z historią statusów i pozwala anulować wyłącznie przyszłą, nieanulowaną wizytę
+(serwer sprawdza datę ponownie). Panel pracownika pokazuje wizyty na dziś, przyszłe
+i historię; dozwolone przejścia to `oczekująca → potwierdzona`,
+`potwierdzona → zrealizowana` oraz `oczekująca → anulowana`.
 
 ---
 
@@ -140,15 +218,18 @@ System został zaprojektowany z podziałem na role.
 
 ### Klient
 
-Klient korzysta z publicznej części serwisu oraz może dokonywać rezerwacji usług.
+Klient korzysta z publicznej części serwisu oraz składa rezerwacje:
 
-Przykładowe możliwości:
+> Przeglądanie usług ➔ Wybór usługi ➔ Wybór pracownika ➔ Wybór daty i godziny ➔ Potwierdzenie ➔ Moje rezerwacje
 
-> Przeglądanie usług ➔ Wybór usługi ➔ Wybór terminu ➔ Podanie informacji o zleceniu ➔ Utworzenie rezerwacji
+Może też anulować własną przyszłą rezerwację (zmiana statusu, nie usunięcie).
 
 ### Pracownik
 
-Pracownik odpowiada za realizację zleceń oraz obsługę powierzonych mu usług.
+Pracownik widzi w `?page=dashboard` wyłącznie wizyty przypisane do swojego profilu
+(`employees.id` wynikające z `users.id`), podzielone na dziś, przyszłe i historię.
+Może potwierdzić oczekującą wizytę, oznaczyć potwierdzoną jako zrealizowaną albo
+anulować oczekującą. Cudze ID w POST jest odrzucane kodem 403 bez zmiany w bazie.
 
 ### Administrator
 
@@ -217,13 +298,15 @@ Główna struktura repozytorium:
 
 > OstatniWorekCementu/
 > ├── app/                # logika aplikacji (MVC)
-> │   ├── controllers/    # kontrolery (Home, Auth, PasswordReset, EmailVerification, Profile, Dashboard, Admin)
+> │   ├── controllers/    # kontrolery (Home, Auth, PasswordReset, EmailVerification, Profile,
+> │   │                   #            Dashboard, Admin, Offer, Booking, Client)
 > │   ├── models/         # modele (Database, User, PasswordReset, EmailVerification, EmailSend,
 > │   │                   #         ServiceCategory, Service, Employee, EmployeeService,
 > │   │                   #         EmployeeAvailability, EmployeeDayOff, Reservation,
 > │   │                   #         StatusHistory, AdminLog, Stats)
-> │   ├── helpers/        # pomocniki (CSRF, autoryzacja, walidacja, paginacja, adresy URL, tokeny)
-> │   └── views/          # widoki (layout, strony, admin/, errors/ — 403/404/500)
+> │   ├── services/       # AvailabilityService — wyliczanie wolnych slotów
+> │   ├── helpers/        # pomocniki (CSRF, autoryzacja, walidacja, paginacja, adresy URL, tokeny, flash)
+> │   └── views/          # widoki (layout, strony, offer/, booking/, client/, dashboard/, admin/, errors/ — 403/404/500)
 > ├── config/             # konfiguracja aplikacji i serwera MySQL
 > │   └── mysql/
 > ├── database/           # schemat, dane testowe i scalony zrzut
@@ -239,7 +322,9 @@ Główna struktura repozytorium:
 > │   ├── js/
 > │   └── vendor/         # lokalny Bootstrap 5.3 (CSS + JS, bez CDN)
 > ├── tools/              # narzędzia CLI (migrate.php, migrate.sh, qa-smoke.sh)
-> │   └── migrate.php     # runner migracji PDO (uruchamiany w entrypoint.sh)
+> │   ├── migrate.php     # runner migracji PDO (uruchamiany w entrypoint.sh)
+> │   ├── test-conflicts.php # 7 przypadków nakładania + excludeId (8/8 PASS)
+> │   └── check-slots.php # weryfikacja algorytmu dostępności (6/6 PASS)
 > ├── .env.example        # wzór konfiguracji lokalnej
 > ├── docker-compose.yml  # stos lokalny (app + db + phpMyAdmin)
 > ├── LICENSE
@@ -454,12 +539,15 @@ przy kolejnym uruchomieniu. `005` dodaje historię zmian statusów rezerwacji (`
 
 ## Testy
 
-Automatyczny smoke test (76 punktów kontrolnych: sesja, CSRF, rejestracja z linkiem,
-weryfikacja, XSS, IDOR, trzy role, blokada konta, dostęp do panelu administratora,
-operacje destrukcyjne, paginacja i wyszukiwanie użytkowników, favicon, ochrona
-własnego konta, schemat bazy, migracje, kodowanie polskich znaków, retencja,
-historia statusów, log operacji, dni wolne, statystyki i eksport CSV)
-uruchamiamy przeciw działającemu stosowi:
+Automatyczny smoke test to **72 asercje w kodzie** (`grep -c 'pass "' tools/qa-smoke.sh`),
+a w pełnym przebiegu **103/103 PASS** — część asercji powtarzają pętle (role i strony
+panelu). Zakres: sesja, CSRF, rejestracja z linkiem, weryfikacja, XSS, IDOR (GET i POST),
+trzy role, blokada konta, dostęp do panelu administratora, operacje destrukcyjne,
+paginacja i wyszukiwanie użytkowników, favicon, ochrona własnego konta, schemat bazy,
+migracje, kodowanie polskich znaków, retencja, historia statusów, log operacji, dni
+wolne, statystyki, eksport CSV, proces rezerwacji (kolejność kroków, data z przeszłości,
+godzina poza slotami, pracownik nieprzypisany do usługi), panel klienta i pracownika
+oraz znikanie nieaktywnej usługi z oferty. Uruchamiamy przeciw działającemu stosowi:
 
 ```bash
 bash tools/qa-smoke.sh
@@ -480,8 +568,8 @@ Wynik to `X/Y PASS`; kod wyjścia `1`, gdy cokolwiek padło. Rzeczy wymagające 
 bash tools/qa-smoke.sh
 ```
 
-Wynik: `76/76 PASS`, 0 FAIL, 2 SKIP. SKIP-y wymagają przeglądarki lub restartu
-kontenera — opisane poniżej.
+Wynik: `103/103 PASS`, 0 FAIL, 2 SKIP (72 asercje w kodzie skryptu, resztę dają pętle).
+SKIP-y wymagają przeglądarki lub restartu kontenera — opisane poniżej.
 
 ### Manualnie — czego automat nie sprawdzi
 
@@ -670,6 +758,21 @@ System rezerwacji usług budowlanych – projekt semestralny 5IT.
 
 Projekt jest rozwijany w ramach prac nad systemem rezerwacji usług budowlanych.
 
+### Etap 4 — rezerwacje, panel klienta i pracownika
+
+| # | Zadanie | Status |
+|---|---------|--------|
+| 1 | `AvailabilityService` — okna pracy, urlopy, rezerwacje, siatka 15 min | ukończone |
+| 2 | `Reservation::hasConflict()` + `create()` w transakcji z blokadą wierszy | ukończone (8/8 PASS) |
+| 3 | Proces rezerwacji: usługa → pracownik → data → godzina → potwierdzenie | ukończone |
+| 4 | Panel klienta: lista, szczegóły, historia statusów, anulowanie | ukończone |
+| 5 | Panel pracownika: dziś / przyszłe / historia, zmiana statusu | ukończone |
+| 6 | Ochrona IDOR (404 dla cudzych ID) i CSRF wszystkich POST | ukończone |
+| 7 | Testy 45–55 w `tools/qa-smoke.sh` + `test-conflicts.php` + `check-slots.php` | ukończone |
+| 8 | Dokumentacja procesu, reguły konfliktów i algorytmu dostępności | ukończone |
+| 9 | UX/responsywność 375 px (#99) | w toku — patrz punkt 11 |
+| 10 | AJAX z terminami | nie zrealizowane (poza zakresem etapu 4) |
+
 ### Etap 3 — panel administratora
 
 | # | Zadanie | Status |
@@ -707,5 +810,5 @@ Projekt jest rozwijany w ramach prac nad systemem rezerwacji usług budowlanych.
 | 14 | Weryfikacja adresu e-mail po rejestracji, polityka B (#72) | ukończone |
 | 15 | Usunięcie transportu poczty (linki na ekranie) i minimalizacja `.env` | ukończone |
 
-Kolejne elementy systemu mogą obejmować panel pracownika, proces rezerwacji po stronie
-klienta oraz dalsze usprawnienia obsługi rezerwacji.
+Kolejne elementy systemu mogą obejmować AJAX-owe odświeżanie terminów, powiadomienia
+o rezerwacjach oraz dalsze usprawnienia obsługi zleceń.
