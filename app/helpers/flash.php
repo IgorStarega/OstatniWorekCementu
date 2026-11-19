@@ -3,7 +3,7 @@
 // AdminController ma własny, prywatny mechanizm (admin_flash) i zostaje bez zmian.
 
 // Zapisuje komunikat na czas jednego przekierowania.
-// $type: 'status' (sukces) albo 'alert' (błąd); inne wartości traktujemy jak alert.
+// $type: 'status' (sukces) albo 'alert' (błąd).
 function flash_set(string $type, string $message): void
 {
     if (session_status() !== PHP_SESSION_ACTIVE) {
@@ -16,7 +16,7 @@ function flash_set(string $type, string $message): void
     ];
 }
 
-// Zwraca komunikat i natychmiast go usuwa, żeby nie pojawił się drugi raz.
+// Zwraca komunikat i od razu go usuwa, żeby nie pojawił się drugi raz.
 function flash_pull(): ?array
 {
     if (session_status() !== PHP_SESSION_ACTIVE) {

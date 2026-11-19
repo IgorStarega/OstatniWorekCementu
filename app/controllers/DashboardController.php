@@ -1,6 +1,7 @@
 <?php
-// Panel pracownika. Administrator także wchodzi na ?page=dashboard (test 8a),
-// ale widzi tylko kartę z linkiem do panelu administratora.
+// Panel pracownika: wizyty przypisane do profilu employees powiązanego
+// z zalogowanym kontem users. Administrator nadal wchodzi na ?page=dashboard
+// (test 8a), ale widzi tylko kartę z linkiem do panelu administratora.
 class DashboardController
 {
     private $config;
@@ -14,15 +15,15 @@ class DashboardController
     {
         requireRole('pracownik', 'admin');
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && postString('action') === 'status') {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->changeStatus();
             return;
         }
 
         $pdo = Database::connect($this->config['db']);
-        $pageTitle = 'Panel';
 
         if (currentUserRole() === 'admin') {
+            $pageTitle = 'Panel zarządzania';
             require BASE_PATH . '/app/views/layout/header.php';
             require BASE_PATH . '/app/views/dashboard/admin_hint.php';
             require BASE_PATH . '/app/views/layout/footer.php';
@@ -30,6 +31,9 @@ class DashboardController
         }
 
         $employee = (new Employee($pdo))->findByUserId((int) currentUserId());
+
+        $pageTitle = 'Panel pracownika';
+        $pageClass = 'dashboard-main';
 
         if ($employee === null) {
             require BASE_PATH . '/app/views/layout/header.php';
@@ -62,9 +66,18 @@ class DashboardController
         require BASE_PATH . '/app/views/layout/footer.php';
     }
 
+    // Zmiana statusu wizyty przez pracownika. Najpierw własność (id z POST
+    // da się podmienić), potem whitelista dozwolonych przejść.
     public function changeStatus(): void
     {
         requireRole('pracownik', 'admin');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            header('Allow: POST');
+            return;
+        }
+
         csrf_verify(postString('csrf_token'));
 
         $pdo = Database::connect($this->config['db']);
@@ -76,34 +89,33 @@ class DashboardController
         }
 
         $id = (int) postString('id');
-        $newStatus = postString('status');
         $reservation = $id > 0 ? (new Reservation($pdo))->find($id) : null;
 
-        // Własność sprawdzamy przed jakąkolwiek zmianą: id z POST da się podmienić.
-        if ($reservation === null || (int) $reservation['employee_id'] !== (int) $employee['id']) {
+        if ($reservation === null) {
+            flash_set('alert', 'Nie znaleziono rezerwacji.');
+            $this->redirect();
+        }
+
+        if ((int) $reservation['employee_id'] !== (int) $employee['id']) {
             $this->forbidden();
             return;
         }
 
+        $status = postString('status');
         $allowed = [
             'oczekująca'   => ['potwierdzona', 'anulowana'],
             'potwierdzona' => ['zrealizowana'],
         ];
         $oldStatus = (string) $reservation['status'];
 
-        if (!isset($allowed[$oldStatus]) || !in_array($newStatus, $allowed[$oldStatus], true)) {
-            flash_set('alert', 'Niedozwolona zmiana statusu.');
+        if (!isset($allowed[$oldStatus]) || !in_array($status, $allowed[$oldStatus], true)) {
+            flash_set('alert', 'Ta zmiana statusu jest niedozwolona.');
             $this->redirect();
         }
 
-        $changed = (new Reservation($pdo))->updateStatus($id, $newStatus, (int) currentUserId());
+        (new Reservation($pdo))->updateStatus($id, $status, (int) currentUserId());
 
-        if ($changed) {
-            flash_set('status', 'Status rezerwacji został zmieniony.');
-        } else {
-            flash_set('alert', 'Nie udało się zmienić statusu rezerwacji.');
-        }
-
+        flash_set('status', 'Status rezerwacji został zmieniony.');
         $this->redirect();
     }
 

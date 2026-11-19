@@ -41,12 +41,11 @@ $isAdminPage = strpos($currentPage, 'admin-') === 0;
                         </li>
                         <?php if (currentUserRole() === 'klient'): ?>
                             <li class="nav-item">
-                                <a class="nav-link<?= in_array($currentPage, ['booking', 'my-reservations', 'reservation'], true) ? ' is-active' : '' ?>" href="/?page=my-reservations">Moje rezerwacje</a>
+                                <a class="nav-link<?= $currentPage === 'my-reservations' || $currentPage === 'reservation' ? ' is-active' : '' ?>" href="/?page=my-reservations">Moje rezerwacje</a>
                             </li>
-                        <?php endif; ?>
-                        <?php if (currentUserRole() === 'pracownik'): ?>
+                        <?php elseif (currentUserRole() === 'pracownik'): ?>
                             <li class="nav-item">
-                                <a class="nav-link<?= $currentPage === 'dashboard' ? ' is-active' : '' ?>" href="/?page=dashboard">Panel</a>
+                                <a class="nav-link<?= $currentPage === 'dashboard' ? ' is-active' : '' ?>" href="/?page=dashboard">Panel pracownika</a>
                             </li>
                         <?php endif; ?>
                         <?php if (currentUserRole() === 'admin'): ?>
@@ -81,14 +80,11 @@ $isAdminPage = strpos($currentPage, 'admin-') === 0;
         </nav>
     </header>
     <main class="site-main <?= htmlspecialchars($pageClass ?? '', ENT_QUOTES, 'UTF-8') ?>">
-        <?php
-        // Osobna nazwa zmiennej, żeby nie nadpisać $flash używanego przez layout admina.
-        $globalFlash = flash_pull();
-        ?>
+        <?php $globalFlash = function_exists('flash_pull') ? flash_pull() : null; ?>
         <?php if ($globalFlash !== null): ?>
-            <div class="container-xxl">
-                <p role="<?= htmlspecialchars($globalFlash['type'], ENT_QUOTES, 'UTF-8') ?>" class="mb-3">
-                    <?= htmlspecialchars($globalFlash['message'], ENT_QUOTES, 'UTF-8') ?>
-                </p>
-            </div>
+            <?php $flashRole = $globalFlash['type'] === 'status' ? 'status' : 'alert'; ?>
+            <p role="<?= htmlspecialchars($flashRole, ENT_QUOTES, 'UTF-8') ?>"
+               class="alert <?= $flashRole === 'status' ? 'alert-success' : 'alert-danger' ?> mb-4">
+                <?= htmlspecialchars($globalFlash['message'], ENT_QUOTES, 'UTF-8') ?>
+            </p>
         <?php endif; ?>

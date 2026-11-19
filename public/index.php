@@ -119,9 +119,7 @@ switch ($page) {
         break;
 
     case 'reservation':
-        // Tablica w ?id= nie może wywołać ostrzeżenia — traktujemy ją jak brak ID.
-        $reservationId = is_string($_GET['id'] ?? null) ? (int) $_GET['id'] : 0;
-        (new ClientController($config))->show($reservationId);
+        (new ClientController($config))->show((int)($_GET['id'] ?? 0));
         break;
 
     case 'login':

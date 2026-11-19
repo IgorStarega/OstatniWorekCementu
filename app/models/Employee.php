@@ -43,7 +43,7 @@ class Employee
 
     // Profil pracownika po ID KONTA użytkownika (users.id).
     // Sesja trzyma users.id, a rezerwacje employees.id — to jest źródło
-    // najczęstszego błędu przy panelu pracownika.
+    // najczęstszego błędu w panelu pracownika, dlatego mapowanie ma własną metodę.
     public function findByUserId(int $userId): ?array
     {
         $statement = $this->pdo->prepare(

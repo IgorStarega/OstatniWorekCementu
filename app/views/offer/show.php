@@ -18,14 +18,17 @@
         <p class="card-text fw-bold fs-4 mb-3"><?= formatPrice($service['price']) ?></p>
 
         <?php
-        // Rezerwację składa wyłącznie klient. Gość trafia na logowanie,
-        // a pracownik i administrator widzą nieaktywny przycisk.
+        // Rezerwacje składa wyłącznie klient. Gość trafia na logowanie,
+        // a pracownik i administrator dostają nieaktywny przycisk.
         $role = currentUserRole();
+        $bookingHref = $role === null
+            ? '/?page=login'
+            : '/?page=booking&step=service&service_id=' . (int) $service['id'];
         ?>
-        <?php if ($role === null): ?>
-            <a class="btn btn-primary" href="/?page=login">Zarezerwuj</a>
-        <?php elseif ($role === 'klient'): ?>
-            <a class="btn btn-primary" href="/?page=booking&amp;service_id=<?= (int) $service['id'] ?>">Zarezerwuj</a>
+        <?php if ($role !== null && $role !== 'klient'): ?>
+            <button type="button" class="btn btn-primary" disabled aria-disabled="true">Rezerwacje składa klient</button>
+        <?php elseif ($employeeList === []): ?>
+            <button type="button" class="btn btn-primary" disabled aria-disabled="true">Zarezerwuj</button>
         <?php else: ?>
             <button type="button" class="btn btn-primary" disabled aria-disabled="true">Rezerwacje składa klient</button>
         <?php endif; ?>

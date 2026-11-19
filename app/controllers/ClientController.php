@@ -1,5 +1,7 @@
 <?php
-// Panel klienta: wyłącznie własne rezerwacje i ich anulowanie.
+// Panel klienta: własne rezerwacje i ich szczegóły.
+// Klient nigdy nie dostaje Reservation::find() — wyłącznie findForUser()/cancel(),
+// więc cudze ID wygląda jak nieistniejące (404), a nie jak brak uprawnień.
 class ClientController
 {
     private $config;
@@ -29,6 +31,7 @@ class ClientController
         }
 
         $pageTitle = 'Moje rezerwacje';
+        $pageClass = 'client-main';
         require BASE_PATH . '/app/views/layout/header.php';
         require BASE_PATH . '/app/views/client/reservations.php';
         require BASE_PATH . '/app/views/layout/footer.php';
@@ -38,27 +41,17 @@ class ClientController
     {
         requireRole('klient');
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && postString('action') === 'cancel') {
+        // Anulowanie przychodzi POST-em na ten sam adres (action=cancel).
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->cancel();
             return;
         }
 
-        // GET z action=cancel nie jest dozwolony — anulowanie tylko POST-em.
-        if (is_string($_GET['action'] ?? null) && $_GET['action'] === 'cancel') {
-            $this->cancel();
-            return;
-        }
-
-        // IDOR: wyłącznie findForUser(), find() zostaje dla panelu admina (zadanie #91).
         $pdo = Database::connect($this->config['db']);
         $reservation = (new Reservation($pdo))->findForUser($id, (int) currentUserId());
 
         if ($reservation === null) {
-            http_response_code(404);
-            $pageTitle = 'Nie znaleziono rezerwacji';
-            require BASE_PATH . '/app/views/layout/header.php';
-            require BASE_PATH . '/app/views/errors/404.php';
-            require BASE_PATH . '/app/views/layout/footer.php';
+            $this->notFound();
             return;
         }
 
@@ -66,6 +59,7 @@ class ClientController
         $canCancel = $this->canCancel($reservation);
 
         $pageTitle = 'Rezerwacja #' . (int) $reservation['id'];
+        $pageClass = 'client-main';
         require BASE_PATH . '/app/views/layout/header.php';
         require BASE_PATH . '/app/views/client/reservation.php';
         require BASE_PATH . '/app/views/layout/footer.php';
@@ -78,18 +72,22 @@ class ClientController
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             http_response_code(405);
             header('Allow: POST');
-            exit;
+            return;
         }
 
         csrf_verify(postString('csrf_token'));
 
-        // ID użytkownika pochodzi wyłącznie z sesji. WHERE w cancel() zawiera
-        // user_id, więc podmiana id w POST nie zmieni cudzego wiersza.
         $pdo = Database::connect($this->config['db']);
-        $result = (new Reservation($pdo))->cancel(
-            (int) postString('id'),
-            (int) currentUserId()
-        );
+        $id = (int) postString('id');
+        $userId = (int) currentUserId();
+
+        // Cudze i nieistniejące ID kończy się tak samo — 404, zero zmian w bazie.
+        if ($id < 1 || (new Reservation($pdo))->findForUser($id, $userId) === null) {
+            $this->notFound();
+            return;
+        }
+
+        $result = (new Reservation($pdo))->cancel($id, $userId);
 
         if (($result['ok'] ?? false) === true) {
             flash_set('status', 'Rezerwacja została anulowana.');
@@ -104,7 +102,7 @@ class ClientController
         exit;
     }
 
-    // Przycisk anulowania tylko dla przyszłej, nieanulowanej wizyty.
+    // Przycisk anulowania pokazujemy tylko dla przyszłej, nieanulowanej wizyty.
     // Model i tak sprawdza to ponownie przy zapisie.
     private function canCancel(array $reservation): bool
     {
@@ -121,5 +119,14 @@ class ClientController
 
         return $date === $today
             && substr((string) $reservation['start_time'], 0, 8) > date('H:i:s');
+    }
+
+    private function notFound(): void
+    {
+        http_response_code(404);
+        $pageTitle = 'Nie znaleziono rezerwacji';
+        require BASE_PATH . '/app/views/layout/header.php';
+        require BASE_PATH . '/app/views/errors/404.php';
+        require BASE_PATH . '/app/views/layout/footer.php';
     }
 }

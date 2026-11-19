@@ -164,16 +164,16 @@ statusu `anulowana`. Dla pary 10:00–11:00 daje to 5 blokad i 2 dopuszczenia:
 
 Te same etykiety są w `tools/test-conflicts.php` (8/8 PASS, w tym `excludeId`).
 `UNIQUE uq_employee_slot` obejmuje tylko `(employee_id, reservation_date, start_time)` —
-**bez `end_time`** — więc rezerwacja 10:00–11:00 i 10:30–11:30 przejdzie przez indeks.
-Jedyną obroną przed nakładaniem jest `hasConflict()` wywoływane w transakcji `create()`,
+**bez `end_time`** — więc rezerwacja 10:00 i 10:30 przejdzie przez indeks. Jedyną
+obroną przed nakładaniem jest `hasConflict()` wywoływane w transakcji `create()`,
 z blokadą wierszy pracownika z danego dnia (`FOR UPDATE`).
 
 ### Ochrona IDOR
 
-Panel klienta używa wyłącznie `forUser()`, `findForUser()` i `cancel()`;
-`Reservation::find()` zostaje dla administratora. Cudze ID rezerwacji w panelu klienta
-kończy się **404** (nie 403), a POST anulowania cudzej rezerwacji nie zmienia bazy.
-Anulowanie jest zmianą statusu na `anulowana`, nigdy `DELETE`.
+Panel klienta używa wyłącznie `forUser()`, `findForUser()` i `cancel()`.
+`Reservation::find()` pozostaje dla administratora. Cudze ID rezerwacji w panelu
+klienta kończy się **404** (nie 403), a POST anulowania cudzej rezerwacji nie zmienia
+bazy. Anulowanie jest zmianą statusu na `anulowana`, nigdy `DELETE`.
 
 ---
 
@@ -181,31 +181,30 @@ Anulowanie jest zmianą statusu na `anulowana`, nigdy `DELETE`.
 
 Ścieżka: **oferta → usługa → pracownik → data → godzina → potwierdzenie → zapis**.
 Rezerwację składa wyłącznie rola `klient`; pracownik i administrator widzą w ofercie
-nieaktywny przycisk. Wejście z oferty to `/?page=booking&service_id=X`, które od razu
-ustawia usługę i przechodzi do wyboru pracownika.
+nieaktywny przycisk.
 
 Stan kroku jest w `$_SESSION['booking']` (`service_id`, `employee_id`, `date`,
 `start_time`, `comment`). Bramka kolejności działa przed renderem: krok `employee`
-wymaga aktywnej usługi, `date` — usługi i pracownika nadal przypisanego do niej,
-`time` — poprawnej daty, braku urlopu i niepustej listy slotów, a `confirm` — godziny
-z tej listy. Ręczne `?page=booking&step=confirm` bez stanu przekierowuje na pierwszy
-brakujący krok i **niczego nie zapisuje**.
+wymaga usługi, `date` — usługi i pracownika, `time` — dodatkowo daty, a `confirm`
+— godziny. Ręczne `?page=booking&step=confirm` bez stanu przekierowuje na pierwszy
+brakujący krok i **niczego nie zapisuje**. „Wstecz” czyści właściwy klucz i wszystkie
+późniejsze.
 
 Każdy krok jest walidowany po stronie serwera:
 
 * **usługa** — `Service::findActive()`, nieaktywna lub nieistniejąca jest odrzucana,
 * **pracownik** — `Employee::forService()` i sprawdzenie ID na liście; podmiana
-  `employee_id` w DevTools jest odrzucana,
-* **data** — format `Y-m-d` z round-tripem, data nie wcześniejsza niż dziś;
+  `employee_id` w DevTools na osobę nieprzypisaną do usługi jest odrzucana,
+* **data** — format `Y-m-d` z round-tripem i data nie wcześniejsza niż dziś;
   `slotsFor()` musi zwrócić niepustą listę,
 * **godzina** — wartość musi być dokładnie jedną z listy `slotsFor()`; brak własnej
   arytmetyki godzin,
 * **potwierdzenie** — ponowne sprawdzenie usługi, pracownika i slotu, potem
-  `Reservation::create()` w jednej transakcji. Błąd zapisu (np. zajęty termin)
-  zostawia usługę, pracownika i datę i wraca do wyboru godziny.
+  `Reservation::create()` w jednej transakcji. Zajęty termin kończy się komunikatem
+  i powrotem do wyboru godziny.
 
 Po zapisie klient trafia na `?page=my-reservations` z komunikatem zawierającym numer
-rezerwacji. Panel klienta dzieli listę na przyszłe i historię, pokazuje szczegóły
+rezerwacji. Panel klienta dzieli listę na nadchodzące i historię, pokazuje szczegóły
 z historią statusów i pozwala anulować wyłącznie przyszłą, nieanulowaną wizytę
 (serwer sprawdza datę ponownie). Panel pracownika pokazuje wizyty na dziś, przyszłe
 i historię; dozwolone przejścia to `oczekująca → potwierdzona`,
@@ -307,7 +306,7 @@ Główna struktura repozytorium:
 > │   │                   #         StatusHistory, AdminLog, Stats)
 > │   ├── services/       # AvailabilityService — wyliczanie wolnych slotów
 > │   ├── helpers/        # pomocniki (CSRF, autoryzacja, walidacja, paginacja, adresy URL, tokeny, flash)
-> │   └── views/          # widoki (layout, strony, offer/, booking/, client/, dashboard/, admin/, errors/)
+> │   └── views/          # widoki (layout, strony, offer/, booking/, client/, dashboard/, admin/, errors/ — 403/404/500)
 > ├── config/             # konfiguracja aplikacji i serwera MySQL
 > │   └── mysql/
 > ├── database/           # schemat, dane testowe i scalony zrzut
@@ -325,8 +324,7 @@ Główna struktura repozytorium:
 > ├── tools/              # narzędzia CLI (migrate.php, migrate.sh, qa-smoke.sh)
 > │   ├── migrate.php     # runner migracji PDO (uruchamiany w entrypoint.sh)
 > │   ├── test-conflicts.php # 7 przypadków nakładania + excludeId (8/8 PASS)
-> │   ├── check-slots.php # weryfikacja algorytmu dostępności (6/6 PASS)
-> │   └── test-reservations.php # test transakcyjnego zapisu rezerwacji
+> │   └── check-slots.php # weryfikacja algorytmu dostępności (6/6 PASS)
 > ├── .env.example        # wzór konfiguracji lokalnej
 > ├── docker-compose.yml  # stos lokalny (app + db + phpMyAdmin)
 > ├── LICENSE
@@ -541,8 +539,8 @@ przy kolejnym uruchomieniu. `005` dodaje historię zmian statusów rezerwacji (`
 
 ## Testy
 
-Automatyczny smoke test to **75 asercji w kodzie** (`grep -c 'pass "' tools/qa-smoke.sh`),
-a w pełnym przebiegu **106/106 PASS** — część asercji powtarzają pętle (role i strony
+Automatyczny smoke test to **72 asercje w kodzie** (`grep -c 'pass "' tools/qa-smoke.sh`),
+a w pełnym przebiegu **103/103 PASS** — część asercji powtarzają pętle (role i strony
 panelu). Zakres: sesja, CSRF, rejestracja z linkiem, weryfikacja, XSS, IDOR (GET i POST),
 trzy role, blokada konta, dostęp do panelu administratora, operacje destrukcyjne,
 paginacja i wyszukiwanie użytkowników, favicon, ochrona własnego konta, schemat bazy,
@@ -570,7 +568,7 @@ Wynik to `X/Y PASS`; kod wyjścia `1`, gdy cokolwiek padło. Rzeczy wymagające 
 bash tools/qa-smoke.sh
 ```
 
-Wynik: `106/106 PASS`, 0 FAIL, 2 SKIP (75 asercji w kodzie skryptu, resztę dają pętle).
+Wynik: `103/103 PASS`, 0 FAIL, 2 SKIP (72 asercje w kodzie skryptu, resztę dają pętle).
 SKIP-y wymagają przeglądarki lub restartu kontenera — opisane poniżej.
 
 ### Manualnie — czego automat nie sprawdzi
@@ -760,20 +758,20 @@ System rezerwacji usług budowlanych – projekt semestralny 5IT.
 
 Projekt jest rozwijany w ramach prac nad systemem rezerwacji usług budowlanych.
 
-### Etap 4 — rezerwacje i panele
+### Etap 4 — rezerwacje, panel klienta i pracownika
 
 | # | Zadanie | Status |
 |---|---------|--------|
-| 1 | Oferta publiczna i wybór pracownika na stronie usługi | ukończone |
-| 2 | Silnik slotów (`AvailabilityService`) z oknami, urlopami i siatką 15 min | ukończone |
-| 3 | Reguła konfliktów `hasConflict()` i transakcyjny zapis `create()` | ukończone (8/8 PASS) |
-| 4 | Proces rezerwacji: usługa → pracownik → data → godzina → potwierdzenie | ukończone |
-| 5 | Panel klienta z listą, szczegółami, historią i anulowaniem | ukończone |
-| 6 | Ochrona IDOR: cudze ID = 404, brak zmian przy cudzym POST | ukończone |
-| 7 | Panel pracownika ze zmianą statusu i kontrolą własności | ukończone |
-| 8 | Testy 45–56, `test-conflicts.php`, `check-slots.php`, `test-reservations.php` | ukończone |
-| 9 | AJAX-owe odświeżanie terminów | planowane |
-| 10 | Powiadomienia e-mail o rezerwacji | planowane |
+| 1 | `AvailabilityService` — okna pracy, urlopy, rezerwacje, siatka 15 min | ukończone |
+| 2 | `Reservation::hasConflict()` + `create()` w transakcji z blokadą wierszy | ukończone (8/8 PASS) |
+| 3 | Proces rezerwacji: usługa → pracownik → data → godzina → potwierdzenie | ukończone |
+| 4 | Panel klienta: lista, szczegóły, historia statusów, anulowanie | ukończone |
+| 5 | Panel pracownika: dziś / przyszłe / historia, zmiana statusu | ukończone |
+| 6 | Ochrona IDOR (404 dla cudzych ID) i CSRF wszystkich POST | ukończone |
+| 7 | Testy 45–55 w `tools/qa-smoke.sh` + `test-conflicts.php` + `check-slots.php` | ukończone |
+| 8 | Dokumentacja procesu, reguły konfliktów i algorytmu dostępności | ukończone |
+| 9 | UX/responsywność 375 px (#99) | ukończone (CSS, empty states, przyciski 44 px; checklista manualna) |
+| 10 | AJAX z terminami | nie zrealizowane (poza zakresem etapu 4) |
 
 ### Etap 3 — panel administratora
 

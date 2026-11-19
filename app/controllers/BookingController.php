@@ -1,7 +1,7 @@
 <?php
 // Proces rezerwacji klienta: usługa -> pracownik -> data -> godzina -> potwierdzenie.
-// Kontroler sprawdza to, czego nie sprawdza Reservation::create(): przeszłą datę,
-// dzień wolny, okno pracy i dokładną godzinę z listy slotów.
+// Stan kroków trzymamy w sesji, ale każde przejście jest walidowane od nowa
+// po stronie serwera — samo ?page=booking&step=confirm nie może nic zapisać.
 class BookingController
 {
     private const STEPS = ['service', 'employee', 'date', 'time', 'confirm'];
@@ -21,72 +21,47 @@ class BookingController
 
         $step = $_GET['step'] ?? 'service';
         if (!is_string($step) || !in_array($step, self::STEPS, true)) {
-            $this->redirect('/?page=booking');
+            $this->redirectStep('service');
         }
 
-        $state = $this->state();
-
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $this->handlePost($pdo, $step, $state);
+            $this->handlePost($pdo, $step);
             return;
         }
 
-        // Wejście z oferty: /?page=booking&service_id=1
-        if ($step === 'service' && isset($_GET['service_id'])) {
-            $serviceId = is_string($_GET['service_id']) ? (int) $_GET['service_id'] : 0;
-            $service = (new Service($pdo))->findActive($serviceId);
-
-            if ($service === null) {
-                flash_set('alert', 'Usługa jest niedostępna.');
-                $this->redirect('/?page=offer');
-            }
-
-            $_SESSION['booking'] = [
-                'service_id'  => (int) $service['id'],
-                'employee_id' => 0,
-                'date'        => '',
-                'start_time'  => '',
-                'comment'     => '',
-            ];
-            $this->redirect('/?page=booking&step=employee');
+        // "Wstecz" czyści właściwy klucz (i wszystkie późniejsze), żeby
+        // cofnięcie naprawdę cofało wybór, a nie tylko wyświetlało krok.
+        if (isset($_GET['back'])) {
+            $_SESSION['booking'] = $this->clearFrom($this->state(), $step);
+            $this->redirectStep($step);
         }
 
-        // Bramka kolejności: ręczne przeskoczenie kroku kończy się powrotem.
-        $blocked = $this->gate($pdo, $step, $state);
-        if ($blocked !== null) {
-            flash_set('alert', $blocked['message']);
-            $this->redirect('/?page=booking&step=' . $blocked['step']);
+        $state = $this->state();
+        $missing = $this->firstMissing($step, $state);
+        if ($missing !== null) {
+            $this->redirectStep($missing);
         }
 
         $this->render($pdo, $step, $state);
     }
 
-    private function handlePost(PDO $pdo, string $step, array $state): void
+    private function handlePost(PDO $pdo, string $step): void
     {
         csrf_verify(postString('csrf_token'));
 
-        $action = postString('action');
-
-        // Cofanie czyści wybraną wartość i wszystkie późniejsze.
-        if ($action === 'back') {
-            $to = postString('to');
-            if (!in_array($to, ['service', 'employee', 'date', 'time'], true)) {
-                flash_set('alert', 'Nie można wrócić do wskazanego kroku.');
-                $this->redirect('/?page=booking&step=' . $step);
-            }
-
-            $state = $this->clearFrom($state, $to);
-            $_SESSION['booking'] = $state;
-            $this->redirect('/?page=booking&step=' . $to);
+        $state = $this->state();
+        $missing = $this->firstMissing($step, $state);
+        if ($missing !== null) {
+            $this->redirectStep($missing);
         }
 
-        if ($step === 'service' && $action === 'select') {
+        if ($step === 'service') {
             $serviceId = (int) postString('service_id');
             $service = (new Service($pdo))->findActive($serviceId);
 
             if ($service === null) {
-                flash_set('alert', 'Wybrana usługa jest niedostępna.');
-                $this->redirect('/?page=booking&step=service');
+                $this->render($pdo, 'service', $state, ['Usługa jest niedostępna.']);
+                return;
             }
 
             $_SESSION['booking'] = [
@@ -96,200 +71,201 @@ class BookingController
                 'start_time'  => '',
                 'comment'     => '',
             ];
-            $this->redirect('/?page=booking&step=employee');
+            $this->redirectStep('employee');
         }
 
-        if ($step === 'employee' && $action === 'select') {
-            $employees = (new Employee($pdo))->forService($state['service_id']);
-            $employeeIds = array_map('intval', array_column($employees, 'id'));
-            $employeeId = (int) postString('employee_id');
+        if ($step === 'employee') {
+            $service = (new Service($pdo))->findActive($state['service_id']);
+            if ($service === null) {
+                $_SESSION['booking'] = $this->emptyState();
+                flash_set('alert', 'Usługa jest niedostępna.');
+                $this->redirectStep('service');
+            }
 
-            if (!in_array($employeeId, $employeeIds, true)) {
-                flash_set('alert', 'Ten pracownik nie wykonuje wybranej usługi.');
-                $this->redirect('/?page=booking&step=employee');
+            $employees = (new Employee($pdo))->forService((int) $service['id']);
+            if ($employees === []) {
+                $this->render($pdo, 'employee', $state, ['Ta usługa nie ma obecnie dostępnego pracownika.']);
+                return;
+            }
+
+            $employeeId = (int) postString('employee_id');
+            if (!$this->employeeBelongs($employees, $employeeId)) {
+                $this->render($pdo, 'employee', $state, ['Wybierz pracownika z listy.']);
+                return;
             }
 
             $state['employee_id'] = $employeeId;
             $state['date'] = '';
             $state['start_time'] = '';
             $_SESSION['booking'] = $state;
-            $this->redirect('/?page=booking&step=date');
+            $this->redirectStep('date');
         }
 
-        if ($step === 'date' && $action === 'select') {
-            $date = postString('date');
-            $parsed = DateTime::createFromFormat('Y-m-d', $date);
+        if ($step === 'date') {
+            $service = (new Service($pdo))->findActive($state['service_id']);
+            if ($service === null) {
+                $_SESSION['booking'] = $this->emptyState();
+                flash_set('alert', 'Usługa jest niedostępna.');
+                $this->redirectStep('service');
+            }
 
-            if ($parsed === false || $parsed->format('Y-m-d') !== $date || $date < date('Y-m-d')) {
-                flash_set('alert', 'Podaj poprawną datę (dzisiejszą lub późniejszą).');
-                $this->redirect('/?page=booking&step=date');
+            $employee = $this->employeeForService($pdo, (int) $service['id'], $state['employee_id']);
+            if ($employee === null) {
+                $state['employee_id'] = 0;
+                $state['date'] = '';
+                $state['start_time'] = '';
+                $_SESSION['booking'] = $state;
+                flash_set('alert', 'Wybrany pracownik nie wykonuje już tej usługi.');
+                $this->redirectStep('employee');
+            }
+
+            $date = trim(postString('date'));
+            $parsed = DateTime::createFromFormat('Y-m-d', $date);
+            $dateValid = $parsed !== false && $parsed->format('Y-m-d') === $date;
+
+            if (!$dateValid || $date < date('Y-m-d')) {
+                $this->render($pdo, 'date', $state, ['Podaj poprawną datę (dzisiejszą lub późniejszą).']);
+                return;
             }
 
             $slots = (new AvailabilityService($pdo))
-                ->slotsFor($state['employee_id'], $state['service_id'], $date);
+                ->slotsFor((int) $employee['id'], (int) $service['id'], $date);
 
             if ($slots === []) {
-                flash_set('alert', 'Brak wolnych terminów w tym dniu. Wybierz inny.');
-                $this->redirect('/?page=booking&step=date');
+                $this->render($pdo, 'date', $state, ['Brak wolnych terminów w tym dniu, wybierz inny.']);
+                return;
             }
 
             $state['date'] = $date;
             $state['start_time'] = '';
             $_SESSION['booking'] = $state;
-            $this->redirect('/?page=booking&step=time');
+            $this->redirectStep('time');
         }
 
-        if ($step === 'time' && $action === 'select') {
-            $startTime = postString('start_time');
-            $slots = (new AvailabilityService($pdo))
-                ->slotsFor($state['employee_id'], $state['service_id'], $state['date']);
+        if ($step === 'time') {
+            $service = (new Service($pdo))->findActive($state['service_id']);
+            if ($service === null) {
+                $_SESSION['booking'] = $this->emptyState();
+                flash_set('alert', 'Usługa jest niedostępna.');
+                $this->redirectStep('service');
+            }
 
+            $employee = $this->employeeForService($pdo, (int) $service['id'], $state['employee_id']);
+            if ($employee === null) {
+                $state['employee_id'] = 0;
+                $state['date'] = '';
+                $state['start_time'] = '';
+                $_SESSION['booking'] = $state;
+                flash_set('alert', 'Wybrany pracownik nie wykonuje już tej usługi.');
+                $this->redirectStep('employee');
+            }
+
+            $slots = (new AvailabilityService($pdo))
+                ->slotsFor((int) $employee['id'], (int) $service['id'], $state['date']);
+
+            if ($slots === []) {
+                $state['date'] = '';
+                $state['start_time'] = '';
+                $_SESSION['booking'] = $state;
+                flash_set('alert', 'Brak wolnych terminów w tym dniu, wybierz inny.');
+                $this->redirectStep('date');
+            }
+
+            $startTime = postString('start_time');
             if (!in_array($startTime, $slots, true)) {
-                flash_set('alert', 'Wybrany termin nie jest już dostępny.');
-                $this->redirect('/?page=booking&step=time');
+                $this->render($pdo, 'time', $state, ['Wybierz godzinę z listy dostępnych terminów.']);
+                return;
             }
 
             $state['start_time'] = $startTime;
             $_SESSION['booking'] = $state;
-            $this->redirect('/?page=booking&step=confirm');
+            $this->redirectStep('confirm');
         }
 
-        if ($step === 'confirm' && $action === 'create') {
+        if ($step === 'confirm') {
             $service = (new Service($pdo))->findActive($state['service_id']);
             if ($service === null) {
+                $_SESSION['booking'] = $this->emptyState();
                 flash_set('alert', 'Usługa jest niedostępna.');
-                $this->redirect('/?page=booking&step=service');
+                $this->redirectStep('service');
             }
 
-            $employees = (new Employee($pdo))->forService((int) $service['id']);
-            $employeeIds = array_map('intval', array_column($employees, 'id'));
-
-            if (!in_array($state['employee_id'], $employeeIds, true)) {
-                flash_set('alert', 'Ten pracownik nie wykonuje wybranej usługi.');
-                $this->redirect('/?page=booking&step=employee');
+            $employee = $this->employeeForService($pdo, (int) $service['id'], $state['employee_id']);
+            if ($employee === null) {
+                $state['employee_id'] = 0;
+                $state['date'] = '';
+                $state['start_time'] = '';
+                $_SESSION['booking'] = $state;
+                flash_set('alert', 'Wybrany pracownik nie wykonuje już tej usługi.');
+                $this->redirectStep('employee');
             }
 
-            // Potwierdzenie liczy sloty od nowa: termin mógł zostać zajęty.
+            // Potwierdzenie liczy wszystko od nowa: usługa może zostać
+            // dezaktywowana, a termin zajęty między krokiem godziny i zapisem.
             $slots = (new AvailabilityService($pdo))
-                ->slotsFor($state['employee_id'], (int) $service['id'], $state['date']);
+                ->slotsFor((int) $employee['id'], (int) $service['id'], $state['date']);
 
-            if (!in_array($state['start_time'], $slots, true)) {
-                flash_set('alert', 'Wybrany termin nie jest już dostępny.');
-                $this->redirect('/?page=booking&step=time');
+            if ($slots === [] || !in_array($state['start_time'], $slots, true)) {
+                $state['start_time'] = '';
+                $_SESSION['booking'] = $state;
+                flash_set('alert', 'Wybrany termin nie jest już dostępny. Wybierz inny.');
+                $this->redirectStep('time');
             }
 
-            $comment = mb_substr(postString('comment'), 0, 500);
+            $comment = trim(postString('comment'));
+            if (mb_strlen($comment) > 500) {
+                flash_set('alert', 'Komentarz może mieć maksymalnie 500 znaków.');
+                $this->redirectStep('confirm');
+            }
+
             $state['comment'] = $comment;
             $_SESSION['booking'] = $state;
 
             $result = (new Reservation($pdo))->create(
                 (int) currentUserId(),
                 (int) $service['id'],
-                (int) $state['employee_id'],
+                (int) $employee['id'],
                 $state['date'],
                 $state['start_time'],
                 $comment
             );
 
-            if (($result['ok'] ?? false) === true) {
-                unset($_SESSION['booking']);
-                flash_set('status', 'Rezerwacja #' . (int) $result['id'] . ' została zapisana.');
-                $this->redirect('/?page=my-reservations');
+            if (($result['ok'] ?? false) !== true) {
+                $error = is_string($result['error'] ?? null)
+                    ? $result['error']
+                    : 'Nie udało się zapisać rezerwacji.';
+                flash_set('alert', $error);
+                $this->redirectStep('time');
             }
 
-            // Zostawiamy usługę, pracownika i datę; klient wybiera tylko nową godzinę.
-            $error = is_string($result['error'] ?? null)
-                ? $result['error']
-                : 'Nie udało się zapisać rezerwacji.';
-            $state['start_time'] = '';
-            $_SESSION['booking'] = $state;
-            flash_set('alert', $error);
-            $this->redirect('/?page=booking&step=time');
-        }
+            unset($_SESSION['booking']);
+            flash_set('status', 'Rezerwacja #' . (int) $result['id'] . ' została zapisana.');
 
-        flash_set('alert', 'Nieznana akcja formularza.');
-        $this->redirect('/?page=booking&step=' . $step);
+            header('Location: /?page=my-reservations');
+            exit;
+        }
     }
 
-    // Zwraca pierwszy krok, na którym brakuje poprawnych danych.
-    private function gate(PDO $pdo, string $step, array $state): ?array
-    {
-        if ($step === 'service') {
-            return null;
-        }
-
-        if ($state['service_id'] < 1) {
-            return ['step' => 'service', 'message' => 'Najpierw wybierz usługę.'];
-        }
-
-        $service = (new Service($pdo))->findActive($state['service_id']);
-        if ($service === null) {
-            return ['step' => 'service', 'message' => 'Wybrana usługa jest niedostępna.'];
-        }
-
-        if ($step === 'employee') {
-            return null;
-        }
-
-        $employees = (new Employee($pdo))->forService((int) $service['id']);
-        $employeeIds = array_map('intval', array_column($employees, 'id'));
-
-        if ($state['employee_id'] < 1 || !in_array($state['employee_id'], $employeeIds, true)) {
-            return ['step' => 'employee', 'message' => 'Wybierz pracownika.'];
-        }
-
-        if ($step === 'date') {
-            return null;
-        }
-
-        $date = $state['date'];
-        $parsed = DateTime::createFromFormat('Y-m-d', $date);
-
-        if ($date === '' || $parsed === false || $parsed->format('Y-m-d') !== $date || $date < date('Y-m-d')) {
-            return ['step' => 'date', 'message' => 'Wybierz poprawną datę.'];
-        }
-
-        if ((new EmployeeAvailability($pdo))->isDayOff($state['employee_id'], $date)) {
-            return ['step' => 'date', 'message' => 'Wybrany dzień jest dniem wolnym pracownika.'];
-        }
-
-        $slots = (new AvailabilityService($pdo))
-            ->slotsFor($state['employee_id'], (int) $service['id'], $date);
-
-        if ($slots === []) {
-            return ['step' => 'date', 'message' => 'Brak wolnych terminów w tym dniu. Wybierz inny.'];
-        }
-
-        if ($step === 'time') {
-            return null;
-        }
-
-        if (!in_array($state['start_time'], $slots, true)) {
-            return ['step' => 'time', 'message' => 'Wybrany termin nie jest już dostępny.'];
-        }
-
-        return null;
-    }
-
-    private function render(PDO $pdo, string $step, array $state): void
+    private function render(PDO $pdo, string $step, array $state, array $errors = []): void
     {
         $service = null;
         $employee = null;
         $employees = [];
-        $services = [];
         $slots = [];
+        $services = [];
 
         if ($state['service_id'] > 0) {
             $service = (new Service($pdo))->findActive($state['service_id']);
         }
 
-        if ($step === 'service') {
-            $services = (new Service($pdo))->allActive();
+        if ($step !== 'service' && $service === null) {
+            $_SESSION['booking'] = $this->emptyState();
+            flash_set('alert', 'Usługa jest niedostępna.');
+            $this->redirectStep('service');
         }
 
-        if ($step !== 'service' && $service === null) {
-            flash_set('alert', 'Wybrana usługa jest niedostępna.');
-            $this->redirect('/?page=booking&step=service');
+        if ($step === 'service') {
+            $services = (new Service($pdo))->allActive();
         }
 
         if ($step === 'employee') {
@@ -298,23 +274,41 @@ class BookingController
 
         if (in_array($step, ['date', 'time', 'confirm'], true)) {
             $employees = (new Employee($pdo))->forService((int) $service['id']);
-
-            foreach ($employees as $candidate) {
-                if ((int) $candidate['id'] === (int) $state['employee_id']) {
-                    $employee = $candidate;
-                    break;
-                }
-            }
+            $employee = $this->employeeForService($pdo, (int) $service['id'], $state['employee_id']);
 
             if ($employee === null) {
-                flash_set('alert', 'Wybierz pracownika.');
-                $this->redirect('/?page=booking&step=employee');
+                $state['employee_id'] = 0;
+                $state['date'] = '';
+                $state['start_time'] = '';
+                $_SESSION['booking'] = $state;
+                flash_set('alert', 'Wybrany pracownik nie wykonuje już tej usługi.');
+                $this->redirectStep('employee');
             }
         }
 
-        if ($step === 'time' || $step === 'confirm') {
+        if ($step === 'time') {
             $slots = (new AvailabilityService($pdo))
                 ->slotsFor((int) $employee['id'], (int) $service['id'], $state['date']);
+
+            if ($slots === []) {
+                $state['date'] = '';
+                $state['start_time'] = '';
+                $_SESSION['booking'] = $state;
+                flash_set('alert', 'Brak wolnych terminów w tym dniu, wybierz inny.');
+                $this->redirectStep('date');
+            }
+        }
+
+        if ($step === 'confirm') {
+            $slots = (new AvailabilityService($pdo))
+                ->slotsFor((int) $employee['id'], (int) $service['id'], $state['date']);
+
+            if ($slots === [] || !in_array($state['start_time'], $slots, true)) {
+                $state['start_time'] = '';
+                $_SESSION['booking'] = $state;
+                flash_set('alert', 'Wybrany termin nie jest już dostępny. Wybierz inny.');
+                $this->redirectStep('time');
+            }
         }
 
         $titles = [
@@ -326,6 +320,7 @@ class BookingController
         ];
 
         $pageTitle = $titles[$step];
+        $pageClass = 'booking-main';
         $currentStep = $step;
         $booking = $state;
 
@@ -373,25 +368,57 @@ class BookingController
         ];
     }
 
+    // Kolejność jest twarda: nie da się przeskoczyć kroku, którego brakuje.
+    private function firstMissing(string $step, array $state): ?string
+    {
+        if ($step === 'service') {
+            return null;
+        }
+        if ($state['service_id'] < 1) {
+            return 'service';
+        }
+
+        if ($step === 'employee') {
+            return null;
+        }
+        if ($state['employee_id'] < 1) {
+            return 'employee';
+        }
+
+        if ($step === 'date') {
+            return null;
+        }
+        if ($state['date'] === '') {
+            return 'date';
+        }
+
+        if ($step === 'time') {
+            return null;
+        }
+        if ($state['start_time'] === '') {
+            return 'time';
+        }
+
+        return null;
+    }
+
+    // Cofnięcie do kroku czyści jego wartość i wszystkie późniejsze.
     private function clearFrom(array $state, string $step): array
     {
         if ($step === 'service') {
             return $this->emptyState();
         }
-
         if ($step === 'employee') {
             $state['employee_id'] = 0;
             $state['date'] = '';
             $state['start_time'] = '';
             $state['comment'] = '';
         }
-
         if ($step === 'date') {
             $state['date'] = '';
             $state['start_time'] = '';
             $state['comment'] = '';
         }
-
         if ($step === 'time') {
             $state['start_time'] = '';
             $state['comment'] = '';
@@ -400,9 +427,31 @@ class BookingController
         return $state;
     }
 
-    private function redirect(string $location): void
+    private function employeeBelongs(array $employees, int $employeeId): bool
     {
-        header('Location: ' . $location);
+        foreach ($employees as $employee) {
+            if ((int) $employee['id'] === $employeeId) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function employeeForService(PDO $pdo, int $serviceId, int $employeeId): ?array
+    {
+        foreach ((new Employee($pdo))->forService($serviceId) as $employee) {
+            if ((int) $employee['id'] === $employeeId) {
+                return $employee;
+            }
+        }
+
+        return null;
+    }
+
+    private function redirectStep(string $step): void
+    {
+        header('Location: /?page=booking&step=' . $step);
         exit;
     }
 }

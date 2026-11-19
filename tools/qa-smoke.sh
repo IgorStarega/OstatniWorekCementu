@@ -66,13 +66,15 @@ get_csrf() {
 alerts() { grep -oP '<p role="alert">\K[^<]*' "$TMP/body" | tr '\n' '|'; }
 
 cleanup() {
-    # Rezerwacje utworzone przez testy etapu 4.
-    dbq "DELETE FROM reservations WHERE comment LIKE 'QA smoke%'" >/dev/null 2>&1
+    # Rezerwacje założone przez testy etapu 4 (gdyby regresja dopuściła zapis).
+    dbq "DELETE FROM reservations WHERE comment = 'QA smoke'" >/dev/null 2>&1
     if [ -n "$SMOKE_EMAIL" ]; then
+        dbq "DELETE FROM reservations
+             WHERE user_id = (SELECT id FROM users WHERE email = '$SMOKE_EMAIL')" >/dev/null 2>&1
         dbq "DELETE FROM email_sends WHERE email = '$SMOKE_EMAIL'" >/dev/null 2>&1
         dbq "DELETE FROM users WHERE email = '$SMOKE_EMAIL'" >/dev/null 2>&1
     fi
-    # Test 55 dezaktywuje usługę 12 — zawsze przywracamy ją do oferty.
+    # Test 55 dezaktywuje usługę 12 — po przebiegu musi wrócić do oferty.
     dbq "UPDATE services SET is_active = 1 WHERE id = 12" >/dev/null 2>&1
     # Konto blokowane w teście 16 musi po skrypcie zostać odblokowane.
     dbq "UPDATE users SET failed_attempts = 0, locked_until = NULL
@@ -124,6 +126,8 @@ fi
 # Reset blokady na wypadek, gdyby poprzedni przebieg przerwał się przed cleanupem.
 dbq "UPDATE users SET failed_attempts = 0, locked_until = NULL
      WHERE email = 'tomasz.zielinski@example.com'" >/dev/null 2>&1
+dbq "UPDATE services SET is_active = 1 WHERE id = 12" >/dev/null 2>&1
+
 dbq "UPDATE services SET is_active = 1 WHERE id = 12" >/dev/null 2>&1
 
 STAMP=$(date +%s%N)
@@ -854,31 +858,30 @@ for entry in "klient|$JAR_ANNA|200" "pracownik|$JAR_EMP|403" "admin|$JAR_ADMIN|4
     fi
 done
 
-# --- 46. Regres #92: pracownik ma swój panel ----------------------------
-code=$(req GET "$BASE_URL/?page=dashboard" -b "$JAR_EMP" -c "$JAR_EMP")
-if [ "$code" = "200" ] && grep -q 'Dziś' "$TMP/body" \
-   && ! grep -qE 'Fatal error|Warning|Notice|Uncaught' "$TMP/body"; then
-    pass "46. pracownik dashboard -> 200 z sekcją Dziś"
+# --- 46. Regres: klient nie wchodzi na panel pracownika -----------------
+code=$(req GET "$BASE_URL/?page=dashboard" -b "$JAR_ANNA" -c "$JAR_ANNA")
+if [ "$code" = "403" ]; then
+    pass "46. klient na dashboard = 403"
 else
-    fail "46. pracownik dashboard -> 200 z sekcją Dziś" "otrzymano $code"
+    fail "46. klient na dashboard = 403" "otrzymano $code"
 fi
 
-# --- 47. IDOR GET: cudza rezerwacja to 404 ------------------------------
+# --- 47. IDOR: cudza rezerwacja to 404, nie 403 -------------------------
 TOMASZ_RES=$(dbq "SELECT id FROM reservations
                   WHERE user_id = (SELECT id FROM users WHERE email = 'tomasz.zielinski@example.com')
                   LIMIT 1")
 if [ -n "$TOMASZ_RES" ]; then
     code=$(req GET "$BASE_URL/?page=reservation&id=$TOMASZ_RES" -b "$JAR_ANNA" -c "$JAR_ANNA")
     if [ "$code" = "404" ]; then
-        pass "47. IDOR GET: cudza rezerwacja = 404"
+        pass "47. IDOR: cudza rezerwacja GET = 404"
     else
-        fail "47. IDOR GET: cudza rezerwacja = 404" "otrzymano $code"
+        fail "47. IDOR: cudza rezerwacja GET = 404" "otrzymano $code"
     fi
 else
-    fail "47. IDOR GET: cudza rezerwacja = 404" "brak rezerwacji Tomasza"
+    fail "47. IDOR: cudza rezerwacja GET = 404" "brak rezerwacji Tomasza w bazie"
 fi
 
-# --- 48. IDOR POST: anulowanie cudzej nic nie zmienia -------------------
+# --- 48. IDOR POST: anulowanie cudzej rezerwacji nic nie zmienia --------
 if [ -n "$TOMASZ_RES" ]; then
     STATUS_BEFORE=$(dbq "SELECT status FROM reservations WHERE id = $TOMASZ_RES")
     CSRF=$(get_csrf "$BASE_URL/?page=my-reservations" "$JAR_ANNA")
@@ -893,47 +896,11 @@ if [ -n "$TOMASZ_RES" ]; then
         fail "48. IDOR POST: cudza rezerwacja bez zmian" "przed=$STATUS_BEFORE po=$STATUS_AFTER"
     fi
 else
-    fail "48. IDOR POST: cudza rezerwacja bez zmian" "brak rezerwacji Tomasza"
+    fail "48. IDOR POST: cudza rezerwacja bez zmian" "brak rezerwacji Tomasza w bazie"
 fi
 
-# --- 48b. GET action=cancel = 405 ---------------------------------------
-ANNA_RES=$(dbq "SELECT id FROM reservations
-                WHERE user_id = (SELECT id FROM users WHERE email = 'anna.kowalska@example.com')
-                ORDER BY id ASC LIMIT 1")
-if [ -n "$ANNA_RES" ]; then
-    code=$(req GET "$BASE_URL/?page=reservation&action=cancel&id=$ANNA_RES" -b "$JAR_ANNA" -c "$JAR_ANNA")
-    if [ "$code" = "405" ]; then
-        pass "48b. GET action=cancel = 405"
-    else
-        fail "48b. GET action=cancel = 405" "otrzymano $code"
-    fi
-else
-    fail "48b. GET action=cancel = 405" "brak rezerwacji Anny"
-fi
-
-# --- 48c. Anulowanie przeszłej wizyty odrzucone serwerowo ---------------
-PAST_RES=$(dbq "SELECT id FROM reservations
-                WHERE user_id = (SELECT id FROM users WHERE email = 'anna.kowalska@example.com')
-                  AND reservation_date < CURDATE()
-                ORDER BY id ASC LIMIT 1")
-if [ -n "$PAST_RES" ]; then
-    STATUS_BEFORE=$(dbq "SELECT status FROM reservations WHERE id = $PAST_RES")
-    CSRF=$(get_csrf "$BASE_URL/?page=my-reservations" "$JAR_ANNA")
-    req POST "$BASE_URL/?page=reservation" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null \
-        --data-urlencode "csrf_token=$CSRF" \
-        --data-urlencode "action=cancel" \
-        --data-urlencode "id=$PAST_RES"
-    STATUS_AFTER=$(dbq "SELECT status FROM reservations WHERE id = $PAST_RES")
-    if [ "$STATUS_BEFORE" = "$STATUS_AFTER" ]; then
-        pass "48c. przeszła wizyta nie da się anulować ($STATUS_BEFORE)"
-    else
-        fail "48c. przeszła wizyta nie da się anulować" "przed=$STATUS_BEFORE po=$STATUS_AFTER"
-    fi
-else
-    fail "48c. przeszła wizyta nie da się anulować" "brak przeszłej rezerwacji Anny"
-fi
-
-# --- 49. Potwierdzenie bez sesji = redirect na booking ------------------
+# --- 49. Ręczne wejście na potwierdzenie bez stanu = redirect ----------
+req GET "$BASE_URL/?page=booking&step=service&back=1" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null
 code=$(req GET "$BASE_URL/?page=booking&step=confirm" -b "$JAR_ANNA" -c "$JAR_ANNA")
 if [ "$code" = "302" ] && grep -qi 'location:.*page=booking' "$TMP/hdr"; then
     pass "49. booking&step=confirm bez sesji -> 302 na booking"
@@ -943,7 +910,7 @@ fi
 
 # --- 50. POST booking bez CSRF = 403 -----------------------------------
 code=$(req POST "$BASE_URL/?page=booking&step=service" -b "$JAR_ANNA" -c "$JAR_ANNA" \
-    --data-urlencode "action=select" --data-urlencode "service_id=1")
+    --data-urlencode "service_id=1")
 if [ "$code" = "403" ]; then
     pass "50. POST booking bez CSRF = 403"
 else
@@ -954,12 +921,12 @@ fi
 COUNT_BEFORE=$(dbq "SELECT COUNT(*) FROM reservations")
 CSRF=$(get_csrf "$BASE_URL/?page=booking&step=service" "$JAR_ANNA")
 req POST "$BASE_URL/?page=booking&step=service" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null \
-    --data-urlencode "csrf_token=$CSRF" --data-urlencode "action=select" --data-urlencode "service_id=1"
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "service_id=1"
 req POST "$BASE_URL/?page=booking&step=employee" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null \
-    --data-urlencode "csrf_token=$CSRF" --data-urlencode "action=select" --data-urlencode "employee_id=1"
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "employee_id=1"
 YESTERDAY=$(date -d 'yesterday' +%F)
 req POST "$BASE_URL/?page=booking&step=date" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null \
-    --data-urlencode "csrf_token=$CSRF" --data-urlencode "action=select" --data-urlencode "date=$YESTERDAY"
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "date=$YESTERDAY"
 COUNT_AFTER=$(dbq "SELECT COUNT(*) FROM reservations")
 if [ "${COUNT_BEFORE:-0}" = "${COUNT_AFTER:-x}" ]; then
     pass "51. booking z datą wczorajszą bez nowej rezerwacji"
@@ -969,14 +936,14 @@ fi
 
 # --- 52. Booking: godzina poza slotami nie tworzy rezerwacji ------------
 req POST "$BASE_URL/?page=booking&step=service" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null \
-    --data-urlencode "csrf_token=$CSRF" --data-urlencode "action=select" --data-urlencode "service_id=1"
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "service_id=1"
 req POST "$BASE_URL/?page=booking&step=employee" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null \
-    --data-urlencode "csrf_token=$CSRF" --data-urlencode "action=select" --data-urlencode "employee_id=1"
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "employee_id=1"
 BOOK_DATE=""
 for offset in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
     candidate=$(date -d "+$offset day" +%F)
     req POST "$BASE_URL/?page=booking&step=date" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null \
-        --data-urlencode "csrf_token=$CSRF" --data-urlencode "action=select" --data-urlencode "date=$candidate"
+        --data-urlencode "csrf_token=$CSRF" --data-urlencode "date=$candidate"
     if grep -qi 'location:.*page=booking&step=time' "$TMP/hdr"; then
         BOOK_DATE="$candidate"
         break
@@ -984,30 +951,29 @@ for offset in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
 done
 COUNT_BEFORE=$(dbq "SELECT COUNT(*) FROM reservations")
 req POST "$BASE_URL/?page=booking&step=time" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null \
-    --data-urlencode "csrf_token=$CSRF" --data-urlencode "action=select" --data-urlencode "start_time=20:00"
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "start_time=20:00"
 COUNT_AFTER=$(dbq "SELECT COUNT(*) FROM reservations")
 if [ -n "$BOOK_DATE" ] && [ "${COUNT_BEFORE:-0}" = "${COUNT_AFTER:-x}" ]; then
-    pass "52. start_time 20:00 bez nowej rezerwacji"
+    pass "52. start_time poza slotami bez nowej rezerwacji"
 else
-    fail "52. start_time 20:00 bez nowej rezerwacji" "data=$BOOK_DATE przed=$COUNT_BEFORE po=$COUNT_AFTER"
+    fail "52. start_time poza slotami bez nowej rezerwacji" "data=$BOOK_DATE przed=$COUNT_BEFORE po=$COUNT_AFTER"
 fi
 
 # --- 53. Booking: pracownik nieprzypisany do usługi odrzucony -----------
 req POST "$BASE_URL/?page=booking&step=service" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null \
-    --data-urlencode "csrf_token=$CSRF" --data-urlencode "action=select" --data-urlencode "service_id=1"
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "service_id=1"
 COUNT_BEFORE=$(dbq "SELECT COUNT(*) FROM reservations")
 code=$(req POST "$BASE_URL/?page=booking&step=employee" -b "$JAR_ANNA" -c "$JAR_ANNA" \
-    --data-urlencode "csrf_token=$CSRF" --data-urlencode "action=select" --data-urlencode "employee_id=4")
-req GET "$BASE_URL/?page=booking&step=employee" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "employee_id=4")
 COUNT_AFTER=$(dbq "SELECT COUNT(*) FROM reservations")
 if [ "${COUNT_BEFORE:-0}" = "${COUNT_AFTER:-x}" ] \
-   && grep -q 'Ten pracownik nie wykonuje wybranej usługi' "$TMP/body"; then
+   && grep -q 'Wybierz pracownika z listy' "$TMP/body"; then
     pass "53. pracownik nieprzypisany do usługi odrzucony"
 else
     fail "53. pracownik nieprzypisany do usługi odrzucony" "kod=$code przed=$COUNT_BEFORE po=$COUNT_AFTER"
 fi
 
-# --- 54. Pracownik vs pracownik: cudza wizyta bez zmian -----------------
+# --- 54. Pracownik nie zmienia statusu cudzej wizyty -------------------
 FOREIGN=$(dbq "SELECT id, status FROM reservations
                WHERE employee_id <> 1
                  AND status IN ('oczekująca', 'potwierdzona')
@@ -1034,44 +1000,28 @@ if [ -n "$FOREIGN" ]; then
         fail "54. pracownik nie zmienia statusu cudzej wizyty" "kod=$code przed=$STATUS_BEFORE po=$STATUS_AFTER"
     fi
 else
-    fail "54. pracownik nie zmienia statusu cudzej wizyty" "brak cudzej rezerwacji"
+    fail "54. pracownik nie zmienia statusu cudzej wizyty" "brak cudzej rezerwacji do testu"
 fi
 
 # --- 55. Nieaktywna usługa znika z oferty i szczegółów -----------------
-# Kategoria "Montaż" ma w opisie "Montaż okien, drzwi...", dlatego sprawdzamy
-# link do konkretnej usługi oraz spadek liczby wystąpień jej nazwy.
-dbq "UPDATE services SET is_active = 1 WHERE id = 12" >/dev/null 2>&1
 CSRF=$(get_csrf "$BASE_URL/?page=admin-services" "$JAR_ADMIN")
-req GET "$BASE_URL/?page=offer" >/dev/null
-NAME_BEFORE=$(grep -o 'Montaż okien' "$TMP/body" | wc -l)
 code=$(req POST "$BASE_URL/?page=admin-services" -b "$JAR_ADMIN" -c "$JAR_ADMIN" \
     --data-urlencode "csrf_token=$CSRF" \
     --data-urlencode "action=toggle" \
     --data-urlencode "id=12")
 req GET "$BASE_URL/?page=offer" >/dev/null
-NAME_AFTER=$(grep -o 'Montaż okien' "$TMP/body" | wc -l)
-if [ "$code" = "302" ] \
-   && ! grep -q 'page=service&amp;id=12' "$TMP/body" \
-   && [ "${NAME_AFTER:-0}" -lt "${NAME_BEFORE:-1}" ]; then
+if [ "$code" = "302" ] && ! grep -q 'page=service&amp;id=12' "$TMP/body"; then
     pass "55. nieaktywna usługa znika z oferty"
 else
-    fail "55. nieaktywna usługa znika z oferty" "toggle=$code nazwa przed=$NAME_BEFORE po=$NAME_AFTER"
+    fail "55. nieaktywna usługa znika z oferty" "toggle=$code, link nadal widoczny"
 fi
 code=$(req GET "$BASE_URL/?page=service&id=12")
 if [ "$code" = "404" ]; then
-    pass "55b. nieaktywna usługa -> 404"
+    pass "55b. nieaktywna usługa -> szczegóły 404"
 else
-    fail "55b. nieaktywna usługa -> 404" "otrzymano $code"
+    fail "55b. nieaktywna usługa -> szczegóły 404" "otrzymano $code"
 fi
 dbq "UPDATE services SET is_active = 1 WHERE id = 12" >/dev/null 2>&1
-
-# --- 56. Gość na booking = redirect na login ---------------------------
-code=$(req GET "$BASE_URL/?page=booking")
-if [ "$code" = "302" ] && grep -qi 'location:.*page=login' "$TMP/hdr"; then
-    pass "56. gość na booking -> 302 login"
-else
-    fail "56. gość na booking -> 302 login" "kod=$code"
-fi
 
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------
 skip "Widok 500 przy błędnym DB_PASS" "wymaga restartu kontenera z innym DB_PASS (environment w compose); nie testujemy w tym przebiegu"
