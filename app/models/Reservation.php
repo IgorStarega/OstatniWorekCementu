@@ -5,6 +5,13 @@ class Reservation
     // Jedyne dozwolone statusy — zgodne z enumem w bazie.
     public const STATUSES = ['oczekująca', 'potwierdzona', 'zrealizowana', 'anulowana'];
 
+    // Dozwolone przejścia statusów. Administrator podlega tej samej mapie —
+    // zmiana wstecz (np. zrealizowana → potwierdzona) nie jest dozwolona.
+    private const ALLOWED_TRANSITIONS = [
+        'oczekująca'   => ['potwierdzona', 'anulowana'],
+        'potwierdzona' => ['zrealizowana'],
+    ];
+
     // Wspólny warunek "wizyta już się rozpoczęła", liczony zegarem bazy.
     // Dzięki temu widok klienta i cancel() nie rozjadą się, gdy PHP i MySQL
     // będą miały inną strefę czasową.
@@ -152,6 +159,14 @@ class Reservation
             if ($oldStatus === $status) {
                 $this->pdo->rollBack();
                 return true;
+            }
+
+            // Dozwolone są tylko przejścia z mapy. Admin nie ma osobnej,
+            // szerszej ścieżki — każda zmiana statusu przechodzi tę kontrolę.
+            $allowed = self::ALLOWED_TRANSITIONS[$oldStatus] ?? [];
+            if (!in_array($status, $allowed, true)) {
+                $this->pdo->rollBack();
+                return false;
             }
 
             $statement = $this->pdo->prepare(
