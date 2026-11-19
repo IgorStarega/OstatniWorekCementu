@@ -80,6 +80,14 @@ class DashboardController
 
         csrf_verify(postString('csrf_token'));
 
+        // Administrator nie ma profilu w employees, więc nie może zmieniać
+        // statusów tutaj — robi to w panelu rezerwacji. Bez tego dostawał 403
+        // po kliknięciu w dashboardzie.
+        if (currentUserRole() === 'admin') {
+            flash_set('alert', 'Administrator zmienia statusy w panelu rezerwacji.');
+            $this->redirect();
+        }
+
         $pdo = Database::connect($this->config['db']);
         $employee = (new Employee($pdo))->findByUserId((int) currentUserId());
 
