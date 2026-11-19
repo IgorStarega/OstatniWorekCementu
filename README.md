@@ -544,8 +544,8 @@ przy kolejnym uruchomieniu. `005` dodaje historię zmian statusów rezerwacji (`
 
 ## Testy
 
-Automatyczny smoke test to **72 asercje w kodzie** (`grep -c 'pass "' tools/qa-smoke.sh`),
-a w pełnym przebiegu **103/103 PASS** — część asercji powtarzają pętle (role i strony
+Automatyczny smoke test to **74 asercje w kodzie** (`grep -c 'pass "' tools/qa-smoke.sh`),
+a w pełnym przebiegu **105/105 PASS** — część asercji powtarzają pętle (role i strony
 panelu). Zakres: sesja, CSRF, rejestracja z linkiem, weryfikacja, XSS, IDOR (GET i POST),
 trzy role, blokada konta, dostęp do panelu administratora, operacje destrukcyjne,
 paginacja i wyszukiwanie użytkowników, favicon, ochrona własnego konta, schemat bazy,
@@ -573,7 +573,7 @@ Wynik to `X/Y PASS`; kod wyjścia `1`, gdy cokolwiek padło. Rzeczy wymagające 
 bash tools/qa-smoke.sh
 ```
 
-Wynik: `103/103 PASS`, 0 FAIL, 2 SKIP (72 asercje w kodzie skryptu, resztę dają pętle).
+Wynik: `105/105 PASS`, 0 FAIL, 2 SKIP (74 asercje w kodzie skryptu, resztę dają pętle).
 SKIP-y wymagają przeglądarki lub restartu kontenera — opisane poniżej.
 
 ### Manualnie — czego automat nie sprawdzi

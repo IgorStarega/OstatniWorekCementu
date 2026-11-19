@@ -1028,6 +1028,22 @@ else
 fi
 dbq "UPDATE services SET is_active = 1 WHERE id = 12" >/dev/null 2>&1
 
+# --- 56. Dane testowe: istnieje wizyta na dziś ---------------------------
+TODAY_RES=$(dbq "SELECT COUNT(*) FROM reservations WHERE reservation_date = CURDATE() AND status <> 'anulowana'")
+if [ "${TODAY_RES:-0}" -ge 1 ]; then
+    pass "56. Dane testowe: istnieje wizyta na dziś"
+else
+    fail "56. Dane testowe: istnieje wizyta na dziś" "0 rezerwacji na CURDATE()"
+fi
+
+# --- 56b. Każda rezerwacja wypada w dzień z oknem pracy pracownika -------
+NO_WINDOW=$(dbq "SELECT COUNT(*) FROM reservations r WHERE NOT EXISTS (SELECT 1 FROM employee_availability a WHERE a.employee_id = r.employee_id AND a.day_of_week = ((DAYOFWEEK(r.reservation_date)+5)%7)+1)")
+if [ "${NO_WINDOW:-0}" -eq 0 ]; then
+    pass "56b. każda rezerwacja w dzień z oknem pracownika"
+else
+    fail "56b. każda rezerwacja w dzień z oknem pracownika" "$NO_WINDOW rezerwacji poza oknem"
+fi
+
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------
 skip "Widok 500 przy błędnym DB_PASS" "wymaga restartu kontenera z innym DB_PASS (environment w compose); nie testujemy w tym przebiegu"
 skip "Wizualna ocena formularzy / responsywność / czytelność błędów" "wymaga przeglądarki — patrz tools/qa-manual.md"
