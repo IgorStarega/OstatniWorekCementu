@@ -65,13 +65,17 @@ get_csrf() {
 # Treść alertów z ostatniej odpowiedzi.
 alerts() { grep -oP '<p role="alert">\K[^<]*' "$TMP/body" | tr '\n' '|'; }
 
-cleanup() {
-    # Rezerwacja #2 jest używana przez testy 24c/24d. Bez przywrócenia
-    # zostawała "zrealizowana" na dzień w przyszłości.
+# Rezerwacja #2 jest używana przez testy 24c/24d. Bez przywrócenia
+# zostawała "zrealizowana" na dzień w przyszłości.
+restore_reservation_two() {
     dbq "UPDATE reservations SET status = 'oczekująca' WHERE id = 2" >/dev/null 2>&1
     dbq "DELETE FROM status_history WHERE reservation_id = 2" >/dev/null 2>&1
     dbq "INSERT INTO status_history (reservation_id, old_status, new_status, changed_by, changed_at)
          SELECT id, NULL, status, 7, created_at FROM reservations WHERE id = 2" >/dev/null 2>&1
+}
+
+cleanup() {
+    restore_reservation_two
     # Rezerwacje założone przez testy etapu 4 (gdyby regresja dopuściła zapis).
     dbq "DELETE FROM reservations WHERE comment = 'QA smoke'" >/dev/null 2>&1
     if [ -n "$SMOKE_EMAIL" ]; then
@@ -109,17 +113,17 @@ if [ "$(dbq "SHOW TABLES LIKE 'users'")" != "users" ]; then
     exit 2
 fi
 
-# Baza bez migracji 005–007 nie przejdzie testów nowych modułów — lepiej
+# Baza bez migracji 005–008 nie przejdzie testów nowych modułów — lepiej
 # zatrzymać się od razu z czytelnym komunikatem niż dostać serię FAIL.
 MISSING_TABLES=""
-for table in status_history admin_log employee_days_off; do
+for table in status_history admin_log employee_days_off employee_breaks; do
     if [ "$(dbq "SHOW TABLES LIKE '$table'")" != "$table" ]; then
         MISSING_TABLES="$MISSING_TABLES $table"
     fi
 done
 
 if [ -n "$MISSING_TABLES" ]; then
-    echo "BŁĄD: baza nie ma migracji 005–007 (brak tabel:$MISSING_TABLES). Uruchom migracje z database/migrations/." >&2
+    echo "BŁĄD: baza nie ma migracji 005–008 (brak tabel:$MISSING_TABLES). Uruchom migracje z database/migrations/." >&2
     exit 1
 fi
 
@@ -353,8 +357,8 @@ TABLES_LIST=$(dbq "SHOW TABLES")
 COLS=$(dbq "SHOW COLUMNS FROM users" | cut -f1)
 MISSING_SCHEMA_TABLES=""
 for t in users service_categories services employees employee_services \
-         employee_availability employee_days_off reservations status_history \
-         admin_log password_resets email_verifications email_sends \
+         employee_availability employee_breaks employee_days_off reservations \
+         status_history admin_log password_resets email_verifications email_sends \
          schema_migrations; do
     if ! printf '%s\n' "$TABLES_LIST" | grep -qx "$t"; then
         MISSING_SCHEMA_TABLES="$MISSING_SCHEMA_TABLES $t"
@@ -365,9 +369,9 @@ if [ -z "$MISSING_SCHEMA_TABLES" ] \
     && printf '%s\n' "$COLS" | grep -q '^failed_attempts$' \
     && printf '%s\n' "$COLS" | grep -q '^locked_until$' \
     && printf '%s\n' "$COLS" | grep -q '^email_verified_at$'; then
-    pass "18. Schemat: 13 tabel domenowych + schema_migrations + kolumny users"
+    pass "18. Schemat: 14 tabel domenowych + schema_migrations + kolumny users"
 else
-    fail "18. Schemat: 13 tabel domenowych + schema_migrations + kolumny users" "brak:$MISSING_SCHEMA_TABLES"
+    fail "18. Schemat: 14 tabel domenowych + schema_migrations + kolumny users" "brak:$MISSING_SCHEMA_TABLES"
 fi
 
 # --- 18b. schema_migrations zawiera wszystkie migracje z katalogu --------
@@ -379,7 +383,7 @@ else
     fail "18b. schema_migrations zawiera wszystkie migracje z katalogu" "w bazie: $(printf '%s' "$APPLIED_MIGS" | tr '\n' ' ')"
 fi
 
-# --- 19. Migracje idempotentne (002–007, dwa razy) -----------------------
+# --- 19. Migracje idempotentne (002–008, dwa razy) -----------------------
 MIG_OUT="$TMP/mig.txt"
 for _ in 1 2; do
     for migration in \
@@ -388,16 +392,17 @@ for _ in 1 2; do
         004-poprawka-kodowania.sql \
         005-historia-statusow.sql \
         006-log-administratora.sql \
-        007-dni-wolne.sql; do
+        007-dni-wolne.sql \
+        008-przerwy.sql; do
         docker compose exec -T "$DB_SERVICE" sh -c \
             'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
             < "database/migrations/$migration" >>"$MIG_OUT" 2>&1
     done
 done
 if ! grep -qi 'ERROR' "$MIG_OUT"; then
-    pass "19. Migracje 002–007 idempotentne (dwa przebiegi)"
+    pass "19. Migracje 002–008 idempotentne (dwa przebiegi)"
 else
-    fail "19. Migracje 002–007 idempotentne (dwa przebiegi)" "$(grep -i 'ERROR' "$MIG_OUT" | head -1)"
+    fail "19. Migracje 002–008 idempotentne (dwa przebiegi)" "$(grep -i 'ERROR' "$MIG_OUT" | head -1)"
 fi
 
 # --- 20. Retencja email_sends -------------------------------------------
@@ -1051,6 +1056,212 @@ if [ "${NO_WINDOW:-0}" -eq 0 ]; then
     pass "56b. każda rezerwacja w dzień z oknem pracownika"
 else
     fail "56b. każda rezerwacja w dzień z oknem pracownika" "$NO_WINDOW rezerwacji poza oknem"
+fi
+
+# --- 57. Strona główna: realna oferta z bazy ----------------------------
+HOME_SERVICE=$(dbq "SELECT name FROM services WHERE is_active = 1 ORDER BY id LIMIT 1")
+code=$(req GET "$BASE_URL/?page=home")
+if [ "$code" = "200" ] && [ -n "$HOME_SERVICE" ] \
+   && grep -qF "$HOME_SERVICE" "$TMP/body" \
+   && ! grep -q 'kolejnym etapie' "$TMP/body"; then
+    pass "57. strona główna pokazuje usługi z bazy bez placeholdera"
+else
+    fail "57. strona główna pokazuje usługi z bazy bez placeholdera" "kod=$code, usługa='$HOME_SERVICE'"
+fi
+
+# --- 58. Karta usługi: klient widzi aktywną rezerwację ------------------
+code=$(req GET "$BASE_URL/?page=service&id=1" -b "$JAR_ANNA" -c "$JAR_ANNA")
+if [ "$code" = "200" ] && grep -q 'page=booking' "$TMP/body" \
+   && ! grep -q 'Rezerwacje składa klient' "$TMP/body"; then
+    pass "58. karta usługi jako klient ma aktywny przycisk Zarezerwuj"
+else
+    fail "58. karta usługi jako klient ma aktywny przycisk Zarezerwuj" "kod=$code"
+fi
+
+# --- 58b. Karta usługi: gość dostaje link do logowania -------------------
+code=$(req GET "$BASE_URL/?page=service&id=1")
+if [ "$code" = "200" ] && grep -q 'Zaloguj się, aby zarezerwować' "$TMP/body"; then
+    pass "58b. karta usługi jako gość prowadzi do logowania"
+else
+    fail "58b. karta usługi jako gość prowadzi do logowania" "kod=$code"
+fi
+
+# --- 59. Preselekcja usługi z karty -> krok pracownika -------------------
+code=$(req GET "$BASE_URL/?page=booking&step=service&service_id=2" -b "$JAR_ANNA" -c "$JAR_ANNA")
+if [ "$code" = "302" ] && grep -qi 'location:.*step=employee' "$TMP/hdr"; then
+    pass "59. service_id z karty ustawia usługę i przechodzi do pracownika"
+else
+    fail "59. service_id z karty ustawia usługę i przechodzi do pracownika" "kod=$code"
+fi
+
+# --- 60-63. API terminów ------------------------------------------------
+TOMORROW=$(date -d 'tomorrow' +%F)
+YESTERDAY=$(date -d 'yesterday' +%F)
+
+code=$(req GET "$BASE_URL/?page=api-slots&employee_id=1&service_id=1&date=$TOMORROW" \
+    -b "$JAR_ANNA" -c "$JAR_ANNA")
+if [ "$code" = "200" ] \
+   && grep -qi 'content-type:.*application/json' "$TMP/hdr" \
+   && grep -q '"ok":true' "$TMP/body"; then
+    pass "60. api-slots zwraca JSON z ok=true"
+else
+    fail "60. api-slots zwraca JSON z ok=true" "kod=$code"
+fi
+
+code=$(req GET "$BASE_URL/?page=api-slots&employee_id=1&service_id=1&date=$TOMORROW")
+if [ "$code" = "403" ] && grep -q '"ok":false' "$TMP/body" && ! grep -qi '<html' "$TMP/body"; then
+    pass "61. api-slots bez sesji = 403 JSON, nie HTML"
+else
+    fail "61. api-slots bez sesji = 403 JSON, nie HTML" "kod=$code"
+fi
+
+code=$(req GET "$BASE_URL/?page=api-slots&employee_id=1&service_id=99999&date=$TOMORROW" \
+    -b "$JAR_ANNA" -c "$JAR_ANNA")
+if [ "$code" = "422" ]; then
+    pass "62. api-slots z nieistniejącą usługą = 422"
+else
+    fail "62. api-slots z nieistniejącą usługą = 422" "kod=$code"
+fi
+
+code=$(req GET "$BASE_URL/?page=api-slots&employee_id=1&service_id=1&date=$YESTERDAY" \
+    -b "$JAR_ANNA" -c "$JAR_ANNA")
+if [ "$code" = "422" ] && grep -q 'Data nie może być z przeszłości' "$TMP/body"; then
+    pass "63. api-slots z datą wczorajszą = 422"
+else
+    fail "63. api-slots z datą wczorajszą = 422" "kod=$code"
+fi
+
+# --- 64. Przerwa realnie odejmuje sloty ---------------------------------
+# Piotr ma przerwę 11:00-11:15; dokładamy tymczasową 12:00-12:30 i
+# sprawdzamy, że 4-godzinna usługa nie startuje w jej środku.
+NEXT_MONDAY=$(date -d 'next monday' +%F)
+dbq "DELETE FROM employee_breaks WHERE label = 'QA przerwa'" >/dev/null 2>&1
+dbq "INSERT INTO employee_breaks (employee_id, day_of_week, start_time, end_time, label)
+     VALUES (2, 1, '12:00:00', '12:30:00', 'QA przerwa')" >/dev/null 2>&1
+code=$(req GET "$BASE_URL/?page=api-slots&employee_id=2&service_id=3&date=$NEXT_MONDAY" \
+    -b "$JAR_ANNA" -c "$JAR_ANNA")
+BREAK_OK=no
+if [ "$code" = "200" ] \
+   && grep -q '"12:30"' "$TMP/body" \
+   && ! grep -q '"11:45"' "$TMP/body" \
+   && ! grep -q '"12:00"' "$TMP/body" \
+   && ! grep -q '"12:15"' "$TMP/body"; then
+    BREAK_OK=yes
+fi
+dbq "DELETE FROM employee_breaks WHERE label = 'QA przerwa'" >/dev/null 2>&1
+if [ "$BREAK_OK" = "yes" ]; then
+    pass "64. przerwa 12:00-12:30 usuwa nachodzące sloty"
+else
+    fail "64. przerwa 12:00-12:30 usuwa nachodzące sloty" "kod=$code"
+fi
+
+# --- 65-66. Przełożenie wizyty przez klienta ----------------------------
+ANNA_ID=$(dbq "SELECT id FROM users WHERE email = 'anna.kowalska@example.com'")
+RES_ROW=$(dbq "SELECT id, reservation_date, start_time, end_time FROM reservations
+               WHERE user_id = $ANNA_ID
+                 AND reservation_date > CURDATE()
+                 AND status IN ('oczekująca', 'potwierdzona')
+               ORDER BY id LIMIT 1")
+RES_ID=$(printf '%s' "$RES_ROW" | cut -f1)
+RES_DATE=$(printf '%s' "$RES_ROW" | cut -f2)
+RES_START=$(printf '%s' "$RES_ROW" | cut -f3)
+RES_END=$(printf '%s' "$RES_ROW" | cut -f4)
+
+TARGET_DATE=""
+TARGET_SLOT=""
+TARGET_CSRF=""
+if [ -n "$RES_ID" ]; then
+    for offset in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
+        candidate=$(date -d "+$offset day" +%F)
+        [ "$candidate" = "$RES_DATE" ] && continue
+
+        req GET "$BASE_URL/?page=reschedule&id=$RES_ID&date=$candidate" \
+            -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null
+        # Wartość radio jest w następnej linii, więc grep działa po samym value.
+        candidate_slot=$(grep -oP 'value="\K[0-9]{2}:[0-9]{2}' "$TMP/body" | head -1)
+        if [ -n "$candidate_slot" ]; then
+            TARGET_DATE="$candidate"
+            TARGET_SLOT="$candidate_slot"
+            TARGET_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' "$TMP/body" | head -1)
+            break
+        fi
+    done
+fi
+
+if [ -n "$TARGET_DATE" ] && [ -n "$TARGET_SLOT" ]; then
+    code=$(req POST "$BASE_URL/?page=reschedule&id=$RES_ID" -b "$JAR_ANNA" -c "$JAR_ANNA" \
+        --data-urlencode "csrf_token=$TARGET_CSRF" \
+        --data-urlencode "id=$RES_ID" \
+        --data-urlencode "date=$TARGET_DATE" \
+        --data-urlencode "start_time=$TARGET_SLOT")
+    NEW_TERM=$(dbq "SELECT CONCAT(reservation_date, ' ', start_time) FROM reservations WHERE id = $RES_ID")
+    EXPECTED_TERM="$TARGET_DATE $TARGET_SLOT:00"
+    if [ "$code" = "302" ] && [ "$NEW_TERM" = "$EXPECTED_TERM" ]; then
+        pass "65. przełożenie wizyty zapisuje nowy termin"
+    else
+        fail "65. przełożenie wizyty zapisuje nowy termin" "kod=$code termin='$NEW_TERM'"
+    fi
+
+    # Ten sam dzień, godzina spoza slotów: 422 albo redirect bez zmiany daty.
+    req GET "$BASE_URL/?page=reschedule&id=$RES_ID&date=$TARGET_DATE" \
+        -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null
+    BAD_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' "$TMP/body" | head -1)
+    code=$(req POST "$BASE_URL/?page=reschedule&id=$RES_ID" -b "$JAR_ANNA" -c "$JAR_ANNA" \
+        --data-urlencode "csrf_token=$BAD_CSRF" \
+        --data-urlencode "id=$RES_ID" \
+        --data-urlencode "date=$TARGET_DATE" \
+        --data-urlencode "start_time=20:00")
+    AFTER_INVALID=$(dbq "SELECT CONCAT(reservation_date, ' ', start_time) FROM reservations WHERE id = $RES_ID")
+    if { [ "$code" = "422" ] || [ "$code" = "302" ]; } \
+       && [ "$AFTER_INVALID" = "$EXPECTED_TERM" ]; then
+        pass "66. przełożenie poza slotami nie zmienia terminu"
+    else
+        fail "66. przełożenie poza slotami nie zmienia terminu" "kod=$code termin='$AFTER_INVALID'"
+    fi
+
+    # Przywrócenie danych demonstracyjnych po teście.
+    dbq "UPDATE reservations SET reservation_date = '$RES_DATE',
+             start_time = '$RES_START', end_time = '$RES_END'
+         WHERE id = $RES_ID" >/dev/null 2>&1
+    dbq "DELETE FROM status_history WHERE reservation_id = $RES_ID
+             AND old_status = new_status" >/dev/null 2>&1
+else
+    fail "65. przełożenie wizyty zapisuje nowy termin" "brak przyszłej rezerwacji Anny lub wolnego terminu"
+    fail "66. przełożenie poza slotami nie zmienia terminu" "brak danych do testu"
+fi
+
+# --- 67. IDOR: cudza rezerwacja w formularzu przełożenia = 404 ----------
+if [ -n "${TOMASZ_RES:-}" ]; then
+    code=$(req GET "$BASE_URL/?page=reschedule&id=$TOMASZ_RES" -b "$JAR_ANNA" -c "$JAR_ANNA")
+    if [ "$code" = "404" ]; then
+        pass "67. IDOR: przełożenie cudzej wizyty GET = 404"
+    else
+        fail "67. IDOR: przełożenie cudzej wizyty GET = 404" "otrzymano $code"
+    fi
+else
+    fail "67. IDOR: przełożenie cudzej wizyty GET = 404" "brak rezerwacji Tomasza w bazie"
+fi
+
+# --- 68. Kalendarz miesiąca w kroku daty --------------------------------
+req GET "$BASE_URL/?page=booking&step=service&service_id=1" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null
+CAL_CSRF=$(get_csrf "$BASE_URL/?page=booking&step=employee" "$JAR_ANNA")
+req POST "$BASE_URL/?page=booking&step=employee" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null \
+    --data-urlencode "csrf_token=$CAL_CSRF" --data-urlencode "employee_id=1"
+code=$(req GET "$BASE_URL/?page=booking&step=date" -b "$JAR_ANNA" -c "$JAR_ANNA")
+if [ "$code" = "200" ] && grep -q 'class="calendar"' "$TMP/body" \
+   && grep -q '>Pon<' "$TMP/body"; then
+    pass "68. krok daty pokazuje kalendarz miesiąca"
+else
+    fail "68. krok daty pokazuje kalendarz miesiąca" "kod=$code"
+fi
+
+# --- 69. Kontrola cleanupu: rezerwacja #2 wraca do stanu początkowego ---
+restore_reservation_two
+STATUS_2=$(dbq "SELECT status FROM reservations WHERE id = 2")
+if [ "$STATUS_2" = "oczekująca" ]; then
+    pass "69. cleanup przywraca rezerwację #2 do statusu oczekująca"
+else
+    fail "69. cleanup przywraca rezerwację #2 do statusu oczekująca" "status=$STATUS_2"
 fi
 
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------
