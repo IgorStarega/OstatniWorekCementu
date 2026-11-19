@@ -54,6 +54,16 @@ class AvailabilityService
             return [];
         }
 
+        // Przerwy pobieramy RAZ na dzień, a nie osobno dla każdego slotu.
+        // Dzięki temu porównania w pętli są już tylko na intach.
+        $breaks = [];
+        foreach ((new EmployeeBreak($this->pdo))->forEmployeeDay($employeeId, $dayOfWeek) as $break) {
+            $breaks[] = [
+                self::timeToMinutes($break['start_time']),
+                self::timeToMinutes($break['end_time']),
+            ];
+        }
+
         $statement = $this->pdo->prepare(
             'SELECT duration_minutes, is_active FROM services WHERE id = :id'
         );
@@ -105,6 +115,18 @@ class AvailabilityService
             $conflicts = false;
             foreach ($busy as [$busyStart, $busyEnd]) {
                 if ($start < $busyEnd && $end > $busyStart) {
+                    $conflicts = true;
+                    break;
+                }
+            }
+            if ($conflicts) {
+                continue;
+            }
+
+            // Ta sama reguła nakładania, ale z przerwą: slot wypada, gdy
+            // zaczyna się przed końcem przerwy i kończy po jej początku.
+            foreach ($breaks as [$breakStart, $breakEnd]) {
+                if ($start < $breakEnd && $end > $breakStart) {
                     $conflicts = true;
                     break;
                 }

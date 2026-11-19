@@ -946,10 +946,13 @@ else
 fi
 
 # --- 52. Booking: godzina poza slotami nie tworzy rezerwacji ------------
+# Usługa 5 u Adama (4 h, bez przerw): po dodaniu przerw długie usługi Jana
+# (6-8 h) nie mieszczą się już w żadnym dniu, a ten test potrzebuje dnia
+# z realnymi slotami, żeby sprawdzić odrzucenie godziny spoza listy.
 req POST "$BASE_URL/?page=booking&step=service" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null \
-    --data-urlencode "csrf_token=$CSRF" --data-urlencode "service_id=1"
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "service_id=5"
 req POST "$BASE_URL/?page=booking&step=employee" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null \
-    --data-urlencode "csrf_token=$CSRF" --data-urlencode "employee_id=1"
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "employee_id=3"
 BOOK_DATE=""
 for offset in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
     candidate=$(date -d "+$offset day" +%F)

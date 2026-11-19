@@ -34,6 +34,7 @@ require BASE_PATH . '/app/models/Service.php';
 require BASE_PATH . '/app/models/Employee.php';
 require BASE_PATH . '/app/models/EmployeeService.php';
 require BASE_PATH . '/app/models/EmployeeAvailability.php';
+require BASE_PATH . '/app/models/EmployeeBreak.php';
 require BASE_PATH . '/app/models/EmployeeDayOff.php';
 require BASE_PATH . '/app/models/StatusHistory.php';
 require BASE_PATH . '/app/models/AdminLog.php';

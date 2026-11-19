@@ -63,6 +63,22 @@ CREATE TABLE `employee_availability` (
 -- --------------------------------------------------------
 
 --
+-- Struktura tabeli dla tabeli `employee_breaks`
+--
+
+CREATE TABLE `employee_breaks` (
+  `id` int NOT NULL,
+  `employee_id` int NOT NULL,
+  `day_of_week` tinyint NOT NULL,
+  `start_time` time NOT NULL,
+  `end_time` time NOT NULL,
+  `label` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  CONSTRAINT `chk_break_time` CHECK (`start_time` < `end_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Struktura tabeli dla tabeli `employee_days_off`
 --
 
@@ -254,6 +270,13 @@ ALTER TABLE `employee_availability`
   ADD UNIQUE KEY `uq_employee_day` (`employee_id`,`day_of_week`);
 
 --
+-- Indeksy dla tabeli `employee_breaks`
+--
+ALTER TABLE `employee_breaks`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_break_employee_day` (`employee_id`,`day_of_week`);
+
+--
 -- Indeksy dla tabeli `employee_days_off`
 --
 ALTER TABLE `employee_days_off`
@@ -358,6 +381,12 @@ ALTER TABLE `employee_availability`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT dla tabeli `employee_breaks`
+--
+ALTER TABLE `employee_breaks`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT dla tabeli `employee_days_off`
 --
 ALTER TABLE `employee_days_off`
@@ -434,6 +463,12 @@ ALTER TABLE `employee_availability`
   ADD CONSTRAINT `employee_availability_ibfk_1` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
+-- Ograniczenia dla tabeli `employee_breaks`
+--
+ALTER TABLE `employee_breaks`
+  ADD CONSTRAINT `fk_break_employee` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE;
+
+--
 -- Ograniczenia dla tabeli `employee_days_off`
 --
 ALTER TABLE `employee_days_off`
@@ -483,7 +518,6 @@ COMMIT;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
-
 -- =========================================
 -- DANE TESTOWE
 -- OSTATNI WOREK CEMENTU
@@ -773,6 +807,29 @@ VALUES
 (4, 3, '07:00:00', '15:00:00'),
 (4, 4, '07:00:00', '15:00:00'),
 (4, 5, '07:00:00', '15:00:00');
+
+
+-- =========================================
+-- PRZERWY W GODZINACH PRACY
+-- Jan (1): obiad 12:00-12:30 od poniedziałku do piątku.
+-- Piotr (2): krótka przerwa 11:00-11:15 od poniedziałku do piątku.
+-- Przerwy realnie odejmują sloty w AvailabilityService.
+-- =========================================
+
+INSERT INTO employee_breaks
+(employee_id, day_of_week, start_time, end_time, label)
+VALUES
+(1, 1, '12:00:00', '12:30:00', 'Obiad'),
+(1, 2, '12:00:00', '12:30:00', 'Obiad'),
+(1, 3, '12:00:00', '12:30:00', 'Obiad'),
+(1, 4, '12:00:00', '12:30:00', 'Obiad'),
+(1, 5, '12:00:00', '12:30:00', 'Obiad'),
+
+(2, 1, '11:00:00', '11:15:00', 'Krótka przerwa'),
+(2, 2, '11:00:00', '11:15:00', 'Krótka przerwa'),
+(2, 3, '11:00:00', '11:15:00', 'Krótka przerwa'),
+(2, 4, '11:00:00', '11:15:00', 'Krótka przerwa'),
+(2, 5, '11:00:00', '11:15:00', 'Krótka przerwa');
 
 
 -- =========================================

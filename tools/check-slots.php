@@ -12,6 +12,7 @@
 // =========================================================================
 
 require dirname(__DIR__) . '/app/models/EmployeeAvailability.php';
+require dirname(__DIR__) . '/app/models/EmployeeBreak.php';
 require dirname(__DIR__) . '/app/models/EmployeeDayOff.php';
 require dirname(__DIR__) . '/app/services/AvailabilityService.php';
 
@@ -82,18 +83,19 @@ $friday = date('Y-m-d', strtotime('next friday'));
 $tuesday = date('Y-m-d', strtotime('next tuesday'));
 $yesterday = date('Y-m-d', strtotime('-1 day'));
 
-// Jan (pracownik 1), usługa 2 (Tynkowanie, 360 min), poniedziałek 08:00-16:00:
-// start musi zmieścić 6 godzin pracy, więc ostatni możliwy to 10:00.
+// Jan ma przerwę 12:00-12:30, a usługa 2 trwa 6 h. W oknie 08:00-16:00
+// każdy kandydat przechodzi przez przerwę, więc dzień nie ma slotów.
 check(
-    "Jan, usługa 2, poniedziałek: ostatni slot 10:00",
-    ['10:00'],
-    [end($availability->slotsFor(1, 2, $monday)) ?: '']
+    "Jan, usługa 2 (360 min), poniedziałek: przerwa blokuje cały dzień",
+    [],
+    $availability->slotsFor(1, 2, $monday)
 );
 
-// Piątek Jana kończy się o 14:00 — 6-hour usługa zmieści się tylko od 08:00.
+// Piątek Jana kończy się o 14:00 — 6-godzinna usługa i tak przechodzi
+// przez przerwę 12:00-12:30, więc slotów nie ma.
 check(
-    "Jan, usługa 2, piątek (okno do 14:00): tylko slot 08:00",
-    ['08:00'],
+    "Jan, usługa 2, piątek (okno do 14:00): brak slotów przez przerwę",
+    [],
     $availability->slotsFor(1, 2, $friday)
 );
 
@@ -104,11 +106,25 @@ check(
     $availability->slotsFor(3, 5, $tuesday)
 );
 
-// Piotr, usługa 9 (480 min), poniedziałek 09:00-17:00: osiem godzin pracy
-// mieści się dokładnie raz — od 09:00. To celowe, a nie błąd.
+// Piotr (przerwa 11:00-11:15), usługa 3 (240 min), poniedziałek 09:00-17:00:
+// pierwszy slot po przerwie to 11:15, więc 11:00 nie może się pojawić.
+$piotrSlots = $availability->slotsFor(2, 3, $monday);
 check(
-    "Piotr, usługa 9 (480 min), poniedziałek: dokładnie jeden slot 09:00",
-    ['09:00'],
+    "Piotr, usługa 3, poniedziałek: pierwszy slot po przerwie 11:15",
+    ['11:15'],
+    [$piotrSlots[0] ?? '']
+);
+check(
+    "Piotr, usługa 3, poniedziałek: 11:00 wypada przez przerwę",
+    [],
+    array_values(array_intersect(['11:00'], $piotrSlots))
+);
+
+// Piotr, usługa 9 (480 min), poniedziałek: całe 8-godzinne okno przechodzi
+// przez przerwę 11:00-11:15, więc nie ma żadnego slotu.
+check(
+    "Piotr, usługa 9 (480 min), poniedziałek: przerwa blokuje cały dzień",
+    [],
     $availability->slotsFor(2, 9, $monday)
 );
 

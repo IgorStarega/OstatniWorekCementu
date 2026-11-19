@@ -290,6 +290,29 @@ VALUES
 
 
 -- =========================================
+-- PRZERWY W GODZINACH PRACY
+-- Jan (1): obiad 12:00-12:30 od poniedziałku do piątku.
+-- Piotr (2): krótka przerwa 11:00-11:15 od poniedziałku do piątku.
+-- Przerwy realnie odejmują sloty w AvailabilityService.
+-- =========================================
+
+INSERT INTO employee_breaks
+(employee_id, day_of_week, start_time, end_time, label)
+VALUES
+(1, 1, '12:00:00', '12:30:00', 'Obiad'),
+(1, 2, '12:00:00', '12:30:00', 'Obiad'),
+(1, 3, '12:00:00', '12:30:00', 'Obiad'),
+(1, 4, '12:00:00', '12:30:00', 'Obiad'),
+(1, 5, '12:00:00', '12:30:00', 'Obiad'),
+
+(2, 1, '11:00:00', '11:15:00', 'Krótka przerwa'),
+(2, 2, '11:00:00', '11:15:00', 'Krótka przerwa'),
+(2, 3, '11:00:00', '11:15:00', 'Krótka przerwa'),
+(2, 4, '11:00:00', '11:15:00', 'Krótka przerwa'),
+(2, 5, '11:00:00', '11:15:00', 'Krótka przerwa');
+
+
+-- =========================================
 -- REZERWACJE
 -- Daty wyliczane od CURDATE(), ale wyłącznie na dni, w których dany
 -- pracownik ma okno pracy mieszczące całą usługę. Import w dowolny
