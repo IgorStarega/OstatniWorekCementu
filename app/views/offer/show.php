@@ -30,7 +30,7 @@
         <?php elseif ($employeeList === []): ?>
             <button type="button" class="btn btn-primary" disabled aria-disabled="true">Zarezerwuj</button>
         <?php else: ?>
-            <a class="btn btn-primary" href="<?= htmlspecialchars($bookingHref, ENT_QUOTES, 'UTF-8') ?>">Zarezerwuj</a>
+            <button type="button" class="btn btn-primary" disabled aria-disabled="true">Rezerwacje składa klient</button>
         <?php endif; ?>
     </div>
 </div>

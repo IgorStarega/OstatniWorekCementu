@@ -350,9 +350,13 @@ class Reservation
             // Szczegóły tylko do logu — klientowi komunikat bez SQLSTATE.
             error_log('Reservation::create: ' . $exception->getMessage());
 
-            // Duplikat uq_employee_slot — identyczny start prześcignął nas
-            // między kontrolą konfliktów a INSERT-em.
-            if ($exception->getCode() === '23000') {
+            // Duplikat uq_employee_slot (23000) albo deadlock InnoDB (SQLSTATE 40001,
+            // driver 1213) oznacza, że równoległy zapis wyprzedził ten request.
+            // Klient dostaje ten sam komunikat o zajętym terminie.
+            $driverCode = (int) ($exception->errorInfo[1] ?? 0);
+            if ($exception->getCode() === '23000'
+                || $exception->getCode() === '40001'
+                || $driverCode === 1213) {
                 return ['ok' => false, 'id' => null, 'error' => 'Ten termin został właśnie zajęty. Wybierz inny.'];
             }
 
@@ -551,5 +555,139 @@ class Reservation
             $conditions === [] ? '' : ' WHERE ' . implode(' AND ', $conditions),
             $params,
         ];
+    }
+
+    // Rezerwacje jednego klienta (panel klienta). Widok dostaje gotowe
+    // nazwy usługi i pracownika, żeby nie robić zapytań w pętli.
+    public function forUser(int $userId): array
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT r.id, r.reservation_date, r.start_time, r.end_time, r.status,
+                    r.final_price, r.comment,
+                    s.name AS service_name, s.duration_minutes,
+                    CONCAT(eu.first_name, ' ', eu.last_name) AS employee_name
+             FROM reservations r
+             JOIN services s ON s.id = r.service_id
+             JOIN employees e ON e.id = r.employee_id
+             JOIN users eu ON eu.id = e.user_id
+             WHERE r.user_id = :user_id
+             ORDER BY r.reservation_date DESC, r.start_time DESC, r.id DESC"
+        );
+        $statement->execute(['user_id' => $userId]);
+
+        return $statement->fetchAll();
+    }
+
+    // Jedna rezerwacja właściciela. Cudze ID ma wyglądać jak nieistniejące,
+    // dlatego kontroler klienta używa wyłącznie tej metody.
+    public function findForUser(int $id, int $userId): ?array
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT r.id, r.reservation_date, r.start_time, r.end_time, r.status,
+                    r.final_price, r.comment,
+                    s.name AS service_name, s.duration_minutes,
+                    CONCAT(eu.first_name, ' ', eu.last_name) AS employee_name
+             FROM reservations r
+             JOIN services s ON s.id = r.service_id
+             JOIN employees e ON e.id = r.employee_id
+             JOIN users eu ON eu.id = e.user_id
+             WHERE r.id = :id AND r.user_id = :user_id
+             LIMIT 1"
+        );
+        $statement->execute([
+            'id'      => $id,
+            'user_id' => $userId,
+        ]);
+        $reservation = $statement->fetch();
+
+        return $reservation ?: null;
+    }
+
+    // Anulowanie przez właściciela: zmiana statusu, nigdy DELETE.
+    // Wiersz blokujemy FOR UPDATE, a StatusHistory dostaje TO SAMO $pdo,
+    // bo PDO nie obsługuje zagnieżdżonych transakcji.
+    public function cancel(int $id, int $userId): array
+    {
+        try {
+            $this->pdo->beginTransaction();
+
+            $statement = $this->pdo->prepare(
+                'SELECT id, status, reservation_date, start_time,
+                        (reservation_date < CURDATE()
+                         OR (reservation_date = CURDATE() AND start_time <= CURTIME())) AS already_started
+                 FROM reservations
+                 WHERE id = :id AND user_id = :user_id
+                 FOR UPDATE'
+            );
+            $statement->execute([
+                'id'      => $id,
+                'user_id' => $userId,
+            ]);
+            $reservation = $statement->fetch();
+
+            if ($reservation === false) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'error' => 'Nie znaleziono rezerwacji.'];
+            }
+
+            $oldStatus = (string) $reservation['status'];
+
+            if ($oldStatus === 'anulowana') {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'error' => 'Ta rezerwacja jest już anulowana.'];
+            }
+
+            if ((int) $reservation['already_started'] === 1) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'error' => 'Nie można anulować wizyty, która już się rozpoczęła.'];
+            }
+
+            $statement = $this->pdo->prepare(
+                "UPDATE reservations
+                 SET status = 'anulowana'
+                 WHERE id = :id AND user_id = :user_id"
+            );
+            $statement->execute([
+                'id'      => $id,
+                'user_id' => $userId,
+            ]);
+
+            (new StatusHistory($this->pdo))->record($id, $oldStatus, 'anulowana', $userId);
+
+            $this->pdo->commit();
+
+            return ['ok' => true, 'error' => null];
+        } catch (Throwable $exception) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+
+            error_log('Reservation::cancel: ' . $exception->getMessage());
+
+            return ['ok' => false, 'error' => 'Nie udało się anulować rezerwacji.'];
+        }
+    }
+
+    // Rezerwacje przypisane pracownikowi (panel pracownika), od najbliższej.
+    public function forEmployee(int $employeeId): array
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT r.id, r.reservation_date, r.start_time, r.end_time, r.status,
+                    r.final_price, r.comment,
+                    CONCAT(u.first_name, ' ', u.last_name) AS client_name,
+                    u.phone AS client_phone,
+                    s.name AS service_name, s.duration_minutes
+             FROM reservations r
+             JOIN users u ON u.id = r.user_id
+             JOIN services s ON s.id = r.service_id
+             WHERE r.employee_id = :employee_id
+             ORDER BY r.reservation_date ASC, r.start_time ASC, r.id ASC"
+        );
+        $statement->execute(['employee_id' => $employeeId]);
+
+        return $statement->fetchAll();
     }
 }

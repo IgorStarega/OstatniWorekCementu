@@ -126,6 +126,7 @@ fi
 # Reset blokady na wypadek, gdyby poprzedni przebieg przerwał się przed cleanupem.
 dbq "UPDATE users SET failed_attempts = 0, locked_until = NULL
      WHERE email = 'tomasz.zielinski@example.com'" >/dev/null 2>&1
+dbq "UPDATE services SET is_active = 1 WHERE id = 12" >/dev/null 2>&1
 
 dbq "UPDATE services SET is_active = 1 WHERE id = 12" >/dev/null 2>&1
 
