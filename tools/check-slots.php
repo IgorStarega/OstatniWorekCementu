@@ -12,6 +12,7 @@
 // =========================================================================
 
 require dirname(__DIR__) . '/app/models/EmployeeAvailability.php';
+require dirname(__DIR__) . '/app/models/EmployeeDayOff.php';
 require dirname(__DIR__) . '/app/services/AvailabilityService.php';
 
 date_default_timezone_set('Europe/Warsaw');

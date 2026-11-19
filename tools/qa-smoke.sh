@@ -128,8 +128,6 @@ dbq "UPDATE users SET failed_attempts = 0, locked_until = NULL
      WHERE email = 'tomasz.zielinski@example.com'" >/dev/null 2>&1
 dbq "UPDATE services SET is_active = 1 WHERE id = 12" >/dev/null 2>&1
 
-dbq "UPDATE services SET is_active = 1 WHERE id = 12" >/dev/null 2>&1
-
 STAMP=$(date +%s%N)
 SMOKE_EMAIL="qa${STAMP}@example.com"
 SMOKE_FIRST="QaSmoke"
@@ -497,30 +495,37 @@ else
     fail "24b. Rezerwacje: wstrzyknięte filtry zignorowane" "kod=$code"
 fi
 
-# zmiana statusu istniejącej rezerwacji (id=1 z seeda)
-CSRF=$(get_csrf "$BASE_URL/?page=admin-reservations&id=1" "$JAR_RES")
+# zmiana statusu na przygotowanej rezerwacji (id=2 z seeda). Model dopuszcza
+# tylko oczekująca -> potwierdzona -> zrealizowana, więc przed testem
+# przywracamy stan początkowy i usuwamy historię z poprzedniego przebiegu.
+dbq "UPDATE reservations SET status = 'oczekująca' WHERE id = 2" >/dev/null 2>&1
+dbq "DELETE FROM status_history WHERE reservation_id = 2" >/dev/null 2>&1
+
+CSRF=$(get_csrf "$BASE_URL/?page=admin-reservations&id=2" "$JAR_RES")
 code=$(req POST "$BASE_URL/?page=admin-reservations" -b "$JAR_RES" -c "$JAR_RES" \
     --data-urlencode "csrf_token=$CSRF" \
     --data-urlencode "action=status" \
-    --data-urlencode "id=1" \
+    --data-urlencode "id=2" \
     --data-urlencode "status=potwierdzona")
-if [ "$code" = "302" ]; then
+STATUS_NOW=$(dbq "SELECT status FROM reservations WHERE id = 2")
+if [ "$code" = "302" ] && [ "$STATUS_NOW" = "potwierdzona" ]; then
     pass "24c. Rezerwacje: zmiana statusu -> 302"
 else
-    fail "24c. Rezerwacje: zmiana statusu -> 302" "kod=$code"
+    fail "24c. Rezerwacje: zmiana statusu -> 302" "kod=$code status=$STATUS_NOW"
 fi
 
 # --- 24d. Historia statusu zapisuje zmianę ------------------------------
-CSRF=$(get_csrf "$BASE_URL/?page=admin-reservations&id=1" "$JAR_RES")
+CSRF=$(get_csrf "$BASE_URL/?page=admin-reservations&id=2" "$JAR_RES")
 req POST "$BASE_URL/?page=admin-reservations" -b "$JAR_RES" -c "$JAR_RES" >/dev/null \
     --data-urlencode "csrf_token=$CSRF" \
-    --data-urlencode "action=status" --data-urlencode "id=1" \
+    --data-urlencode "action=status" --data-urlencode "id=2" \
     --data-urlencode "status=zrealizowana"
-HIST=$(dbq "SELECT COUNT(*) FROM status_history WHERE reservation_id = 1 AND new_status = 'zrealizowana'")
-if [ "${HIST:-0}" -ge 1 ]; then
+HIST=$(dbq "SELECT COUNT(*) FROM status_history WHERE reservation_id = 2 AND new_status = 'zrealizowana'")
+STATUS_FINAL=$(dbq "SELECT status FROM reservations WHERE id = 2")
+if [ "${HIST:-0}" -ge 1 ] && [ "$STATUS_FINAL" = "zrealizowana" ]; then
     pass "24d. Historia statusu zapisuje zmianę"
 else
-    fail "24d. Historia statusu zapisuje zmianę" "wpisów: ${HIST:-0}"
+    fail "24d. Historia statusu zapisuje zmianę" "wpisów: ${HIST:-0}, status=$STATUS_FINAL"
 fi
 
 # --- 24e. Eksport CSV zwraca plik ---------------------------------------

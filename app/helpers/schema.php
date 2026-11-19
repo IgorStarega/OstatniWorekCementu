@@ -27,5 +27,5 @@ function missingTables(PDO $pdo, array $tables): array
 function missingTablesMessage(array $missing): string
 {
     return 'Baza nie ma wymaganych tabel: ' . implode(', ', $missing)
-        . '. Uruchom migracje: bash tools/migrate.sh.';
+        . '. Zrestartuj kontener app (migracje uruchamiają się z entrypoint.sh).';
 }

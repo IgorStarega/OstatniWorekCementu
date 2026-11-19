@@ -5,6 +5,20 @@ class Reservation
     // Jedyne dozwolone statusy — zgodne z enumem w bazie.
     public const STATUSES = ['oczekująca', 'potwierdzona', 'zrealizowana', 'anulowana'];
 
+    // Dozwolone przejścia statusów. Administrator podlega tej samej mapie —
+    // zmiana wstecz (np. zrealizowana → potwierdzona) nie jest dozwolona.
+    private const ALLOWED_TRANSITIONS = [
+        'oczekująca'   => ['potwierdzona', 'anulowana'],
+        'potwierdzona' => ['zrealizowana'],
+    ];
+
+    // Wspólny warunek "wizyta już się rozpoczęła", liczony zegarem bazy.
+    // Dzięki temu widok klienta i cancel() nie rozjadą się, gdy PHP i MySQL
+    // będą miały inną strefę czasową.
+    private const ALREADY_STARTED_SQL =
+        '(reservation_date < CURDATE()
+          OR (reservation_date = CURDATE() AND start_time <= CURTIME()))';
+
     private $pdo;
 
     public function __construct(PDO $pdo)
@@ -74,72 +88,6 @@ class Reservation
         $reservation = $statement->fetch();
 
         return $reservation ?: null;
-    }
-
-    // Rezerwacje jednego klienta (panel klienta). Widok dostaje gotowe
-    // nazwy usługi i pracownika, żeby nie robić zapytań w pętli.
-    public function forUser(int $userId): array
-    {
-        $statement = $this->pdo->prepare(
-            "SELECT r.id, r.reservation_date, r.start_time, r.end_time, r.status,
-                    r.final_price, r.comment,
-                    s.name AS service_name, s.duration_minutes,
-                    CONCAT(eu.first_name, ' ', eu.last_name) AS employee_name
-             FROM reservations r
-             JOIN services s ON s.id = r.service_id
-             JOIN employees e ON e.id = r.employee_id
-             JOIN users eu ON eu.id = e.user_id
-             WHERE r.user_id = :user_id
-             ORDER BY r.reservation_date DESC, r.start_time DESC, r.id DESC"
-        );
-        $statement->execute(['user_id' => $userId]);
-
-        return $statement->fetchAll();
-    }
-
-    // Jedna rezerwacja, ale TYLKO właściciela. Cudze ID ma wyglądać
-    // jak nieistniejące (kontroler zwraca 404), nigdy jak 403.
-    public function findForUser(int $id, int $userId): ?array
-    {
-        $statement = $this->pdo->prepare(
-            "SELECT r.id, r.reservation_date, r.start_time, r.end_time, r.status,
-                    r.final_price, r.comment,
-                    s.name AS service_name, s.duration_minutes,
-                    CONCAT(eu.first_name, ' ', eu.last_name) AS employee_name
-             FROM reservations r
-             JOIN services s ON s.id = r.service_id
-             JOIN employees e ON e.id = r.employee_id
-             JOIN users eu ON eu.id = e.user_id
-             WHERE r.id = :id AND r.user_id = :user_id
-             LIMIT 1"
-        );
-        $statement->execute([
-            'id'      => $id,
-            'user_id' => $userId,
-        ]);
-        $reservation = $statement->fetch();
-
-        return $reservation ?: null;
-    }
-
-    // Rezerwacje przypisane pracownikowi (panel pracownika), od najbliższej.
-    public function forEmployee(int $employeeId): array
-    {
-        $statement = $this->pdo->prepare(
-            "SELECT r.id, r.reservation_date, r.start_time, r.end_time, r.status,
-                    r.final_price, r.comment,
-                    CONCAT(u.first_name, ' ', u.last_name) AS client_name,
-                    u.phone AS client_phone,
-                    s.name AS service_name, s.duration_minutes
-             FROM reservations r
-             JOIN users u ON u.id = r.user_id
-             JOIN services s ON s.id = r.service_id
-             WHERE r.employee_id = :employee_id
-             ORDER BY r.reservation_date ASC, r.start_time ASC, r.id ASC"
-        );
-        $statement->execute(['employee_id' => $employeeId]);
-
-        return $statement->fetchAll();
     }
 
     // Najbliższe rezerwacje na pulpit: od dziś, bez anulowanych.
@@ -213,6 +161,14 @@ class Reservation
                 return true;
             }
 
+            // Dozwolone są tylko przejścia z mapy. Admin nie ma osobnej,
+            // szerszej ścieżki — każda zmiana statusu przechodzi tę kontrolę.
+            $allowed = self::ALLOWED_TRANSITIONS[$oldStatus] ?? [];
+            if (!in_array($status, $allowed, true)) {
+                $this->pdo->rollBack();
+                return false;
+            }
+
             $statement = $this->pdo->prepare(
                 'UPDATE reservations SET status = :status WHERE id = :id'
             );
@@ -250,6 +206,23 @@ class Reservation
         try {
             $this->pdo->beginTransaction();
 
+            // Data i godzina są walidowane również tutaj — model nie może
+            // zakładać, że przyszedł poprawny formularz.
+            $parsedDate = DateTime::createFromFormat('Y-m-d', $date);
+            if ($parsedDate === false || $parsedDate->format('Y-m-d') !== $date) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'id' => null, 'error' => 'Nieprawidłowa data rezerwacji.'];
+            }
+
+            $normalizedStart = self::normalizeTime($startTime);
+            $parsedStart = DateTime::createFromFormat('H:i:s', $normalizedStart);
+            if ($parsedStart === false || $parsedStart->format('H:i:s') !== $normalizedStart) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'id' => null, 'error' => 'Nieprawidłowa godzina rezerwacji.'];
+            }
+
             // Cena i czas trwania zablokowane do końca transakcji (FOR UPDATE),
             // żeby final_price pochodził z odczytu, który właśnie zatwierdzamy.
             $statement = $this->pdo->prepare(
@@ -267,7 +240,7 @@ class Reservation
 
             // Koniec rezerwacji liczy SERWER z czasu trwania usługi —
             // formularz nigdy nie dostarcza end_time.
-            $endTime = (new DateTime($startTime))
+            $endTime = (clone $parsedStart)
                 ->modify('+' . (int) $service['duration_minutes'] . ' minutes')
                 ->format('H:i:s');
 
@@ -292,6 +265,56 @@ class Reservation
                 $this->pdo->rollBack();
 
                 return ['ok' => false, 'id' => null, 'error' => 'Ten pracownik nie wykonuje wybranej usługi.'];
+            }
+
+            // Okno pracy pracownika w dniu tygodnia rezerwacji. Brak wiersza
+            // oznacza, że pracownik wtedy nie pracuje — formularz nie może
+            // być jedyną barierą.
+            $statement = $this->pdo->prepare(
+                'SELECT start_time, end_time
+                 FROM employee_availability
+                 WHERE employee_id = :employee_id AND day_of_week = :day_of_week
+                 LIMIT 1'
+            );
+            $statement->execute([
+                'employee_id' => $employeeId,
+                'day_of_week' => (int) $parsedDate->format('N'),
+            ]);
+            $window = $statement->fetch();
+
+            if ($window === false) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'id' => null, 'error' => 'Pracownik nie pracuje w wybranym dniu.'];
+            }
+
+            // Urlop/dzień wolny blokuje cały dzień, niezależnie od okna.
+            $statement = $this->pdo->prepare(
+                'SELECT COUNT(*) FROM employee_days_off
+                 WHERE employee_id = :employee_id AND date = :date'
+            );
+            $statement->execute([
+                'employee_id' => $employeeId,
+                'date'        => $date,
+            ]);
+
+            if ((int) $statement->fetchColumn() > 0) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'id' => null, 'error' => 'Pracownik ma dzień wolny w wybranym dniu.'];
+            }
+
+            // Start i koniec muszą zmieścić się w oknie pracy. End <= start
+            // oznacza przejście przez północ, czyli wyjście poza okno.
+            $startMinutes = self::timeToMinutes($startTime);
+            $endMinutes = self::timeToMinutes($endTime);
+
+            if ($endMinutes <= $startMinutes
+                || $startMinutes < self::timeToMinutes($window['start_time'])
+                || $endMinutes > self::timeToMinutes($window['end_time'])) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'id' => null, 'error' => 'Termin nie mieści się w godzinach pracy pracownika.'];
             }
 
             // Blokada wierszy rezerwacji pracownika z tego dnia: dwa równoległe
@@ -372,77 +395,6 @@ class Reservation
         }
     }
 
-    // Anulowanie rezerwacji przez właściciela. Anulowanie to zmiana statusu,
-    // nigdy DELETE. Wiersz blokujemy FOR UPDATE, żeby dwa kliknięcia nie
-    // dopisały sprzecznej historii; StatusHistory dostaje TO SAMO $pdo.
-    public function cancel(int $id, int $userId): array
-    {
-        try {
-            $this->pdo->beginTransaction();
-
-            $statement = $this->pdo->prepare(
-                'SELECT id, status, reservation_date, start_time
-                 FROM reservations
-                 WHERE id = :id AND user_id = :user_id
-                 FOR UPDATE'
-            );
-            $statement->execute([
-                'id'      => $id,
-                'user_id' => $userId,
-            ]);
-            $reservation = $statement->fetch();
-
-            if ($reservation === false) {
-                $this->pdo->rollBack();
-
-                return ['ok' => false, 'error' => 'Nie znaleziono rezerwacji.'];
-            }
-
-            $oldStatus = (string) $reservation['status'];
-
-            if ($oldStatus === 'anulowana') {
-                $this->pdo->rollBack();
-
-                return ['ok' => false, 'error' => 'Ta rezerwacja jest już anulowana.'];
-            }
-
-            // Data przeszła albo dzisiejsza wizyta już się zaczęła.
-            $isPast = (string) $reservation['reservation_date'] < date('Y-m-d')
-                || ((string) $reservation['reservation_date'] === date('Y-m-d')
-                    && substr((string) $reservation['start_time'], 0, 8) <= date('H:i:s'));
-
-            if ($isPast) {
-                $this->pdo->rollBack();
-
-                return ['ok' => false, 'error' => 'Nie można anulować zakończonej wizyty.'];
-            }
-
-            $statement = $this->pdo->prepare(
-                "UPDATE reservations
-                 SET status = 'anulowana'
-                 WHERE id = :id AND user_id = :user_id"
-            );
-            $statement->execute([
-                'id'      => $id,
-                'user_id' => $userId,
-            ]);
-
-            (new StatusHistory($this->pdo))->record($id, $oldStatus, 'anulowana', $userId);
-
-            $this->pdo->commit();
-
-            return ['ok' => true, 'error' => null];
-        } catch (Throwable $exception) {
-            if ($this->pdo->inTransaction()) {
-                $this->pdo->rollBack();
-            }
-
-            error_log('Reservation::cancel: ' . $exception->getMessage());
-
-            return ['ok' => false, 'error' => 'Nie udało się anulować rezerwacji.'];
-        }
-    }
-
     // Czy nowa rezerwacja nakłada się na istniejącą rezerwację pracownika
     // w danym dniu. UNIQUE w bazie łapie wyłącznie identyczny start_time —
     // nakładanie się (np. 10:00-11:00 wobec 10:30-11:30) musi wykryć
@@ -494,6 +446,14 @@ class Reservation
         }
 
         return $time;
+    }
+
+    // 'HH:MM[:SS]' -> minuty od północy (do porównań z oknem pracy).
+    private static function timeToMinutes(string $time): int
+    {
+        $parts = explode(':', self::normalizeTime($time));
+
+        return ((int) $parts[0]) * 60 + (int) ($parts[1] ?? 0);
     }
 
     private function baseSelect(): string
@@ -603,6 +563,22 @@ class Reservation
         return $reservation ?: null;
     }
 
+    // Czy wizyta już się rozpoczęła? Decyduje zegar bazy, nie PHP —
+    // ten sam warunek stosuje cancel(). Używane przez UI klienta.
+    public function isStarted(int $id): bool
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT ' . self::ALREADY_STARTED_SQL . '
+             FROM reservations
+             WHERE id = :id
+             LIMIT 1'
+        );
+        $statement->execute(['id' => $id]);
+        $started = $statement->fetchColumn();
+
+        return $started !== false && (int) $started === 1;
+    }
+
     // Anulowanie przez właściciela: zmiana statusu, nigdy DELETE.
     // Wiersz blokujemy FOR UPDATE, a StatusHistory dostaje TO SAMO $pdo,
     // bo PDO nie obsługuje zagnieżdżonych transakcji.
@@ -612,9 +588,7 @@ class Reservation
             $this->pdo->beginTransaction();
 
             $statement = $this->pdo->prepare(
-                'SELECT id, status, reservation_date, start_time,
-                        (reservation_date < CURDATE()
-                         OR (reservation_date = CURDATE() AND start_time <= CURTIME())) AS already_started
+                'SELECT id, status, ' . self::ALREADY_STARTED_SQL . ' AS already_started
                  FROM reservations
                  WHERE id = :id AND user_id = :user_id
                  FOR UPDATE'

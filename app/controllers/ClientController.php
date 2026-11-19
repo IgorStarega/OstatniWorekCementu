@@ -48,7 +48,8 @@ class ClientController
         }
 
         $pdo = Database::connect($this->config['db']);
-        $reservation = (new Reservation($pdo))->findForUser($id, (int) currentUserId());
+        $reservations = new Reservation($pdo);
+        $reservation = $reservations->findForUser($id, (int) currentUserId());
 
         if ($reservation === null) {
             $this->notFound();
@@ -56,7 +57,7 @@ class ClientController
         }
 
         $history = (new StatusHistory($pdo))->forReservation($id);
-        $canCancel = $this->canCancel($reservation);
+        $canCancel = $this->canCancel($reservation, $reservations);
 
         $pageTitle = 'Rezerwacja #' . (int) $reservation['id'];
         $pageClass = 'client-main';
@@ -102,23 +103,16 @@ class ClientController
         exit;
     }
 
-    // Przycisk anulowania pokazujemy tylko dla przyszłej, nieanulowanej wizyty.
-    // Model i tak sprawdza to ponownie przy zapisie.
-    private function canCancel(array $reservation): bool
+    // Przycisk anulowania pokazujemy tylko dla nieanulowanej wizyty, która
+    // jeszcze się nie rozpoczęła. Start liczy model tym samym warunkiem SQL
+    // co cancel(), więc UI i zapis nie mogą się rozjechać.
+    private function canCancel(array $reservation, Reservation $reservations): bool
     {
         if ((string) $reservation['status'] === 'anulowana') {
             return false;
         }
 
-        $today = date('Y-m-d');
-        $date = (string) $reservation['reservation_date'];
-
-        if ($date > $today) {
-            return true;
-        }
-
-        return $date === $today
-            && substr((string) $reservation['start_time'], 0, 8) > date('H:i:s');
+        return !$reservations->isStarted((int) $reservation['id']);
     }
 
     private function notFound(): void
