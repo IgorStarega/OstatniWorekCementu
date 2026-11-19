@@ -128,8 +128,6 @@ dbq "UPDATE users SET failed_attempts = 0, locked_until = NULL
      WHERE email = 'tomasz.zielinski@example.com'" >/dev/null 2>&1
 dbq "UPDATE services SET is_active = 1 WHERE id = 12" >/dev/null 2>&1
 
-dbq "UPDATE services SET is_active = 1 WHERE id = 12" >/dev/null 2>&1
-
 STAMP=$(date +%s%N)
 SMOKE_EMAIL="qa${STAMP}@example.com"
 SMOKE_FIRST="QaSmoke"
