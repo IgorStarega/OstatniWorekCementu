@@ -71,3 +71,11 @@ $isAdminPage = strpos($currentPage, 'admin-') === 0;
         </nav>
     </header>
     <main class="site-main <?= htmlspecialchars($pageClass ?? '', ENT_QUOTES, 'UTF-8') ?>">
+        <?php $globalFlash = function_exists('flash_pull') ? flash_pull() : null; ?>
+        <?php if ($globalFlash !== null): ?>
+            <?php $flashRole = $globalFlash['type'] === 'status' ? 'status' : 'alert'; ?>
+            <p role="<?= htmlspecialchars($flashRole, ENT_QUOTES, 'UTF-8') ?>"
+               class="alert <?= $flashRole === 'status' ? 'alert-success' : 'alert-danger' ?> mb-4">
+                <?= htmlspecialchars($globalFlash['message'], ENT_QUOTES, 'UTF-8') ?>
+            </p>
+        <?php endif; ?>

@@ -23,6 +23,7 @@ require BASE_PATH . '/app/helpers/url.php';
 require BASE_PATH . '/app/helpers/token.php';
 require BASE_PATH . '/app/helpers/schema.php';
 require BASE_PATH . '/app/helpers/format.php';
+require BASE_PATH . '/app/helpers/flash.php';
 require BASE_PATH . '/app/models/Database.php';
 require BASE_PATH . '/app/models/User.php';
 require BASE_PATH . '/app/models/PasswordReset.php';
