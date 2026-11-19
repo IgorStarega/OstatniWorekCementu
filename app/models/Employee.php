@@ -218,6 +218,16 @@ class Employee
         return $statement->fetchAll();
     }
 
+    // Liczba aktywnych pracowników — licznik na stronie głównej.
+    public function countActive(): int
+    {
+        $statement = $this->pdo->query(
+            'SELECT COUNT(*) FROM employees WHERE is_active = 1'
+        );
+
+        return (int) $statement->fetchColumn();
+    }
+
     // Liczba rezerwacji pracownika — blokuje usunięcie.
     public function countReservations(int $employeeId): int
     {
