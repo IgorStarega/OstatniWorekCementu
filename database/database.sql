@@ -518,6 +518,7 @@ COMMIT;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+
 -- =========================================
 -- DANE TESTOWE
 -- OSTATNI WOREK CEMENTU
@@ -810,29 +811,6 @@ VALUES
 
 
 -- =========================================
--- PRZERWY W GODZINACH PRACY
--- Jan (1): obiad 12:00-12:30 od poniedziałku do piątku.
--- Piotr (2): krótka przerwa 11:00-11:15 od poniedziałku do piątku.
--- Przerwy realnie odejmują sloty w AvailabilityService.
--- =========================================
-
-INSERT INTO employee_breaks
-(employee_id, day_of_week, start_time, end_time, label)
-VALUES
-(1, 1, '12:00:00', '12:30:00', 'Obiad'),
-(1, 2, '12:00:00', '12:30:00', 'Obiad'),
-(1, 3, '12:00:00', '12:30:00', 'Obiad'),
-(1, 4, '12:00:00', '12:30:00', 'Obiad'),
-(1, 5, '12:00:00', '12:30:00', 'Obiad'),
-
-(2, 1, '11:00:00', '11:15:00', 'Krótka przerwa'),
-(2, 2, '11:00:00', '11:15:00', 'Krótka przerwa'),
-(2, 3, '11:00:00', '11:15:00', 'Krótka przerwa'),
-(2, 4, '11:00:00', '11:15:00', 'Krótka przerwa'),
-(2, 5, '11:00:00', '11:15:00', 'Krótka przerwa');
-
-
--- =========================================
 -- REZERWACJE
 -- Daty wyliczane od CURDATE(), ale wyłącznie na dni, w których dany
 -- pracownik ma okno pracy mieszczące całą usługę. Import w dowolny
@@ -940,6 +918,22 @@ LIMIT 1;
 INSERT INTO employee_days_off (employee_id, date, reason)
 VALUES
 (1, @d_off, 'Urlop wypoczynkowy');
+
+
+-- =========================================
+-- PRZERWY W GODZINACH PRACY
+-- Tylko u pracowników, których usługi MIESZCZĄ SIĘ w oknie pracy
+-- z zapasem na przerwę. Jan (480 i 360 min), Piotr (480 min) i Marek
+-- (480 min) mają usługi równe lub prawie równe oknu 8 h — każda przerwa
+-- w środku odcięłaby wszystkie sloty. Adam ma 180 i 240 min w oknie 8 h,
+-- więc przerwa 12:00-12:30 realnie odejmuje terminy, ale zostawia inne.
+-- =========================================
+
+INSERT INTO employee_breaks (employee_id, day_of_week, start_time, end_time, label)
+VALUES
+(3, 1, '12:00:00', '12:30:00', 'Przerwa obiadowa'),
+(3, 3, '12:00:00', '12:30:00', 'Przerwa obiadowa'),
+(3, 5, '12:00:00', '12:30:00', 'Przerwa obiadowa');
 
 
 -- =========================================

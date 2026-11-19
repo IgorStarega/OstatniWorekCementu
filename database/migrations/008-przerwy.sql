@@ -37,10 +37,13 @@ SET @break_index_exists := (
     AND INDEX_NAME = 'idx_break_employee_day'
 );
 
+-- Gdy indeks już istnieje, wykonujemy DO 0, a nie SELECT 1: runner używa
+-- PDO::exec() i wynik SELECT-a zostałby nieodczytany (błąd 2014 przy
+-- kolejnej instrukcji).
 SET @break_index_sql := IF(
   @break_index_exists = 0,
   'CREATE INDEX `idx_break_employee_day` ON `employee_breaks` (`employee_id`, `day_of_week`)',
-  'SELECT 1'
+  'DO 0'
 );
 
 PREPARE break_index_stmt FROM @break_index_sql;

@@ -318,9 +318,12 @@ co `hasConflict()`. Panel `?page=admin-availability` ma sekcję „Przerwy” z 
 (dzień, od, do, etykieta), listą istniejących wpisów i usuwaniem przez POST + CSRF.
 Serwer sprawdza dzień 1–7, kolejność godzin i nakładanie z istniejącymi przerwami.
 
-W danych testowych Jan ma obiad 12:00–12:30, a Piotr krótką przerwę 11:00–11:15
-(poniedziałek–piątek). Przerwa realnie odejmuje sloty — w poniedziałek u Piotra
-pierwszy wolny termin 4-godzinnej usługi to 11:15, a nie 11:00.
+Przerwy mają sens tylko u pracowników, których usługa jest krótsza niż okno pracy.
+Usługa 480 min w oknie 8-godzinnym nie ma miejsca na przerwę — każda przerwa w środku
+odcięłaby jedyny możliwy slot. W danych testowych przerwy ma wyłącznie Adam Wiśniewski
+(usługi 180 i 240 min): poniedziałek, środa i piątek 12:00–12:30. Przerwa realnie
+odejmuje terminy, ale zostawia inne — np. usługa 240 min startuje w poniedziałek
+o 08:00, a 12:00 wypada.
 
 ---
 
@@ -676,8 +679,8 @@ Po wszystkich migracjach baza ma **14 tabel domenowych + schema_migrations (tabe
 
 ## Testy
 
-Automatyczny smoke test to **88 asercji w kodzie** (`grep -c 'pass "' tools/qa-smoke.sh`),
-a w pełnym przebiegu **119/119 PASS** — część asercji powtarzają pętle (role i strony
+Automatyczny smoke test to **89 asercji w kodzie** (`grep -c 'pass "' tools/qa-smoke.sh`),
+a w pełnym przebiegu **120/120 PASS** — część asercji powtarzają pętle (role i strony
 panelu). Zakres: sesja, CSRF, rejestracja z linkiem, weryfikacja, XSS, IDOR (GET i POST),
 trzy role, blokada konta, dostęp do panelu administratora, operacje destrukcyjne,
 paginacja i wyszukiwanie użytkowników, favicon, ochrona własnego konta, schemat bazy,
@@ -707,7 +710,7 @@ Wynik to `X/Y PASS`; kod wyjścia `1`, gdy cokolwiek padło. Rzeczy wymagające 
 bash tools/qa-smoke.sh
 ```
 
-Wynik: `119/119 PASS`, 0 FAIL, 2 SKIP (88 asercji w kodzie skryptu, resztę dają pętle).
+Wynik: `120/120 PASS`, 0 FAIL, 2 SKIP (89 asercji w kodzie skryptu, resztę dają pętle).
 SKIP-y wymagają przeglądarki lub restartu kontenera — opisane poniżej.
 
 ### Manualnie — czego automat nie sprawdzi

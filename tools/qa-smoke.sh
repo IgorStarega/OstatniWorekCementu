@@ -951,9 +951,9 @@ else
 fi
 
 # --- 52. Booking: godzina poza slotami nie tworzy rezerwacji ------------
-# Usługa 5 u Adama (4 h, bez przerw): po dodaniu przerw długie usługi Jana
-# (6-8 h) nie mieszczą się już w żadnym dniu, a ten test potrzebuje dnia
-# z realnymi slotami, żeby sprawdzić odrzucenie godziny spoza listy.
+# Test sprawdza odrzucenie godziny spoza listy slotów, a nie dostępność
+# konkretnej usługi. Adam + usługa 5 (240 min) ma realne terminy, np.
+# poniedziałek 08:00, mimo przerwy 12:00-12:30.
 req POST "$BASE_URL/?page=booking&step=service" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null \
     --data-urlencode "csrf_token=$CSRF" --data-urlencode "service_id=5"
 req POST "$BASE_URL/?page=booking&step=employee" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null \
@@ -1262,6 +1262,66 @@ if [ "$STATUS_2" = "oczekująca" ]; then
     pass "69. cleanup przywraca rezerwację #2 do statusu oczekująca"
 else
     fail "69. cleanup przywraca rezerwację #2 do statusu oczekująca" "status=$STATUS_2"
+fi
+
+# --- 70. Każda para pracownik+usługa ma wolny termin w 14 dniach --------
+# Test łapie regresję danych: przerwa, urlop albo brak okna nie może
+# odebrać wszystkich slotów parze z employee_services.
+if RESULT=$(docker compose exec -T app php <<'PHP'
+<?php
+require '/var/www/html/app/models/Database.php';
+require '/var/www/html/app/models/EmployeeAvailability.php';
+require '/var/www/html/app/models/EmployeeBreak.php';
+require '/var/www/html/app/models/EmployeeDayOff.php';
+require '/var/www/html/app/services/AvailabilityService.php';
+
+date_default_timezone_set('Europe/Warsaw');
+
+$config = require '/var/www/html/config/config.php';
+$pdo = Database::connect($config['db']);
+$availability = new AvailabilityService($pdo);
+
+$rows = $pdo->query(
+    'SELECT es.employee_id, es.service_id, s.name
+     FROM employee_services es
+     JOIN services s ON s.id = es.service_id AND s.is_active = 1'
+)->fetchAll();
+
+$bad = [];
+foreach ($rows as $row) {
+    $total = 0;
+    for ($i = 0; $i < 14; $i++) {
+        $date = date('Y-m-d', strtotime('+' . $i . ' day'));
+        $total += count($availability->slotsFor(
+            (int) $row['employee_id'],
+            (int) $row['service_id'],
+            $date
+        ));
+    }
+
+    if ($total === 0) {
+        $bad[] = sprintf(
+            'emp %d + usługa %d (%s)',
+            (int) $row['employee_id'],
+            (int) $row['service_id'],
+            (string) $row['name']
+        );
+    }
+}
+
+if ($bad === []) {
+    echo "OK: wszystkie pary pracownik+usługa mają sloty\n";
+    exit(0);
+}
+
+echo 'BRAK SLOTÓW: ' . implode('; ', $bad) . "\n";
+exit(1);
+PHP
+); then
+    pass "70. każda para pracownik+usługa ma min. 1 wolny termin w 14 dniach"
+else
+    fail "70. każda para pracownik+usługa ma min. 1 wolny termin w 14 dniach" \
+        "$(printf '%s' "$RESULT" | tr '\n' ' ')"
 fi
 
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------
