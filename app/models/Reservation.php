@@ -415,4 +415,118 @@ class Reservation
             $params,
         ];
     }
+
+    // Rezerwacje jednego klienta (panel klienta). Widok dostaje gotowe
+    // nazwy usługi i pracownika, żeby nie robić zapytań w pętli.
+    public function forUser(int $userId): array
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT r.id, r.reservation_date, r.start_time, r.end_time, r.status,
+                    r.final_price, r.comment,
+                    s.name AS service_name, s.duration_minutes,
+                    CONCAT(eu.first_name, ' ', eu.last_name) AS employee_name
+             FROM reservations r
+             JOIN services s ON s.id = r.service_id
+             JOIN employees e ON e.id = r.employee_id
+             JOIN users eu ON eu.id = e.user_id
+             WHERE r.user_id = :user_id
+             ORDER BY r.reservation_date DESC, r.start_time DESC, r.id DESC"
+        );
+        $statement->execute(['user_id' => $userId]);
+
+        return $statement->fetchAll();
+    }
+
+    // Jedna rezerwacja właściciela. Cudze ID ma wyglądać jak nieistniejące,
+    // dlatego kontroler klienta używa wyłącznie tej metody.
+    public function findForUser(int $id, int $userId): ?array
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT r.id, r.reservation_date, r.start_time, r.end_time, r.status,
+                    r.final_price, r.comment,
+                    s.name AS service_name, s.duration_minutes,
+                    CONCAT(eu.first_name, ' ', eu.last_name) AS employee_name
+             FROM reservations r
+             JOIN services s ON s.id = r.service_id
+             JOIN employees e ON e.id = r.employee_id
+             JOIN users eu ON eu.id = e.user_id
+             WHERE r.id = :id AND r.user_id = :user_id
+             LIMIT 1"
+        );
+        $statement->execute([
+            'id'      => $id,
+            'user_id' => $userId,
+        ]);
+        $reservation = $statement->fetch();
+
+        return $reservation ?: null;
+    }
+
+    // Anulowanie przez właściciela: zmiana statusu, nigdy DELETE.
+    // Wiersz blokujemy FOR UPDATE, a StatusHistory dostaje TO SAMO $pdo,
+    // bo PDO nie obsługuje zagnieżdżonych transakcji.
+    public function cancel(int $id, int $userId): array
+    {
+        try {
+            $this->pdo->beginTransaction();
+
+            $statement = $this->pdo->prepare(
+                'SELECT id, status, reservation_date, start_time,
+                        (reservation_date < CURDATE()
+                         OR (reservation_date = CURDATE() AND start_time <= CURTIME())) AS already_started
+                 FROM reservations
+                 WHERE id = :id AND user_id = :user_id
+                 FOR UPDATE'
+            );
+            $statement->execute([
+                'id'      => $id,
+                'user_id' => $userId,
+            ]);
+            $reservation = $statement->fetch();
+
+            if ($reservation === false) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'error' => 'Nie znaleziono rezerwacji.'];
+            }
+
+            $oldStatus = (string) $reservation['status'];
+
+            if ($oldStatus === 'anulowana') {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'error' => 'Ta rezerwacja jest już anulowana.'];
+            }
+
+            if ((int) $reservation['already_started'] === 1) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'error' => 'Nie można anulować wizyty, która już się rozpoczęła.'];
+            }
+
+            $statement = $this->pdo->prepare(
+                "UPDATE reservations
+                 SET status = 'anulowana'
+                 WHERE id = :id AND user_id = :user_id"
+            );
+            $statement->execute([
+                'id'      => $id,
+                'user_id' => $userId,
+            ]);
+
+            (new StatusHistory($this->pdo))->record($id, $oldStatus, 'anulowana', $userId);
+
+            $this->pdo->commit();
+
+            return ['ok' => true, 'error' => null];
+        } catch (Throwable $exception) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+
+            error_log('Reservation::cancel: ' . $exception->getMessage());
+
+            return ['ok' => false, 'error' => 'Nie udało się anulować rezerwacji.'];
+        }
+    }
 }
