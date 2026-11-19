@@ -284,9 +284,13 @@ class Reservation
             // Szczegóły tylko do logu — klientowi komunikat bez SQLSTATE.
             error_log('Reservation::create: ' . $exception->getMessage());
 
-            // Duplikat uq_employee_slot — identyczny start prześcignął nas
-            // między kontrolą konfliktów a INSERT-em.
-            if ($exception->getCode() === '23000') {
+            // Duplikat uq_employee_slot (23000) albo deadlock InnoDB (SQLSTATE 40001,
+            // driver 1213) oznacza, że równoległy zapis wyprzedził ten request.
+            // Klient dostaje ten sam komunikat o zajętym terminie.
+            $driverCode = (int) ($exception->errorInfo[1] ?? 0);
+            if ($exception->getCode() === '23000'
+                || $exception->getCode() === '40001'
+                || $driverCode === 1213) {
                 return ['ok' => false, 'id' => null, 'error' => 'Ten termin został właśnie zajęty. Wybierz inny.'];
             }
 
