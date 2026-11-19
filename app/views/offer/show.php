@@ -18,14 +18,16 @@
         <p class="card-text fw-bold fs-4 mb-3"><?= formatPrice($service['price']) ?></p>
 
         <?php
-        // Rezerwacja wymaga konta (BookingController powstanie w etapie 4),
-        // więc gość trafia na logowanie, a zalogowany na razie wraca do oferty.
-        $bookingHref = currentUserId() === null ? '/?page=login' : '/?page=offer';
+        // Rezerwację składa wyłącznie klient. Gość trafia na logowanie,
+        // a pracownik i administrator widzą nieaktywny przycisk.
+        $role = currentUserRole();
         ?>
-        <?php if ($employeeList === []): ?>
-            <button type="button" class="btn btn-primary" disabled aria-disabled="true">Zarezerwuj</button>
+        <?php if ($role === null): ?>
+            <a class="btn btn-primary" href="/?page=login">Zarezerwuj</a>
+        <?php elseif ($role === 'klient'): ?>
+            <a class="btn btn-primary" href="/?page=booking&amp;service_id=<?= (int) $service['id'] ?>">Zarezerwuj</a>
         <?php else: ?>
-            <a class="btn btn-primary" href="<?= htmlspecialchars($bookingHref, ENT_QUOTES, 'UTF-8') ?>">Zarezerwuj</a>
+            <button type="button" class="btn btn-primary" disabled aria-disabled="true">Rezerwacje składa klient</button>
         <?php endif; ?>
     </div>
 </div>

@@ -48,6 +48,7 @@ require BASE_PATH . '/app/controllers/ProfileController.php';
 require BASE_PATH . '/app/controllers/DashboardController.php';
 require BASE_PATH . '/app/controllers/AdminController.php';
 require BASE_PATH . '/app/controllers/OfferController.php';
+require BASE_PATH . '/app/controllers/BookingController.php';
 
 // Nieobsłużony wyjątek: zapisujemy szczegóły do logu, a użytkownik widzi
 // neutralny widok 500 (bez ścieżek, numerów linii i stack trace).
@@ -106,6 +107,10 @@ switch ($page) {
 
     case 'service':
         (new OfferController($config))->show((int)($_GET['id'] ?? 0));
+        break;
+
+    case 'booking':
+        (new BookingController($config))->handle();
         break;
 
     case 'login':
