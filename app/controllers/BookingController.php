@@ -24,6 +24,23 @@ class BookingController
             $this->redirectStep('service');
         }
 
+        // Wejście z karty usługi: ?page=booking&step=service&service_id=X
+        // ustawia usługę i przechodzi od razu do wyboru pracownika.
+        if ($step === 'service' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+            $preselect = filter_input(INPUT_GET, 'service_id', FILTER_VALIDATE_INT);
+            if ($preselect !== false && $preselect > 0
+                && (new Service($pdo))->findActive($preselect) !== null) {
+                $_SESSION['booking'] = [
+                    'service_id'  => $preselect,
+                    'employee_id' => 0,
+                    'date'        => '',
+                    'start_time'  => '',
+                    'comment'     => '',
+                ];
+                $this->redirectStep('employee');
+            }
+        }
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->handlePost($pdo, $step);
             return;

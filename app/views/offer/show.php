@@ -21,16 +21,17 @@
         // Rezerwacje składa wyłącznie klient. Gość trafia na logowanie,
         // a pracownik i administrator dostają nieaktywny przycisk.
         $role = currentUserRole();
-        $bookingHref = $role === null
-            ? '/?page=login'
-            : '/?page=booking&step=service&service_id=' . (int) $service['id'];
+        $hasEmployees = $employeeList !== [];
         ?>
-        <?php if ($role !== null && $role !== 'klient'): ?>
+        <?php if ($role === null): ?>
+            <a class="btn btn-primary" href="/?page=login">Zaloguj się, aby zarezerwować</a>
+        <?php elseif ($role !== 'klient'): ?>
             <button type="button" class="btn btn-primary" disabled aria-disabled="true">Rezerwacje składa klient</button>
-        <?php elseif ($employeeList === []): ?>
-            <button type="button" class="btn btn-primary" disabled aria-disabled="true">Zarezerwuj</button>
+        <?php elseif (!$hasEmployees): ?>
+            <button type="button" class="btn btn-primary" disabled aria-disabled="true">Brak dostępnego pracownika</button>
         <?php else: ?>
-            <button type="button" class="btn btn-primary" disabled aria-disabled="true">Rezerwacje składa klient</button>
+            <a class="btn btn-primary"
+               href="/?page=booking&amp;step=service&amp;service_id=<?= (int) $service['id'] ?>">Zarezerwuj</a>
         <?php endif; ?>
     </div>
 </div>
