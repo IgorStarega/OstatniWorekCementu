@@ -5,6 +5,13 @@ class Reservation
     // Jedyne dozwolone statusy — zgodne z enumem w bazie.
     public const STATUSES = ['oczekująca', 'potwierdzona', 'zrealizowana', 'anulowana'];
 
+    // Wspólny warunek "wizyta już się rozpoczęła", liczony zegarem bazy.
+    // Dzięki temu widok klienta i cancel() nie rozjadą się, gdy PHP i MySQL
+    // będą miały inną strefę czasową.
+    private const ALREADY_STARTED_SQL =
+        '(reservation_date < CURDATE()
+          OR (reservation_date = CURDATE() AND start_time <= CURTIME()))';
+
     private $pdo;
 
     public function __construct(PDO $pdo)
@@ -466,6 +473,22 @@ class Reservation
         return $reservation ?: null;
     }
 
+    // Czy wizyta już się rozpoczęła? Decyduje zegar bazy, nie PHP —
+    // ten sam warunek stosuje cancel(). Używane przez UI klienta.
+    public function isStarted(int $id): bool
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT ' . self::ALREADY_STARTED_SQL . '
+             FROM reservations
+             WHERE id = :id
+             LIMIT 1'
+        );
+        $statement->execute(['id' => $id]);
+        $started = $statement->fetchColumn();
+
+        return $started !== false && (int) $started === 1;
+    }
+
     // Anulowanie przez właściciela: zmiana statusu, nigdy DELETE.
     // Wiersz blokujemy FOR UPDATE, a StatusHistory dostaje TO SAMO $pdo,
     // bo PDO nie obsługuje zagnieżdżonych transakcji.
@@ -475,9 +498,7 @@ class Reservation
             $this->pdo->beginTransaction();
 
             $statement = $this->pdo->prepare(
-                'SELECT id, status, reservation_date, start_time,
-                        (reservation_date < CURDATE()
-                         OR (reservation_date = CURDATE() AND start_time <= CURTIME())) AS already_started
+                'SELECT id, status, ' . self::ALREADY_STARTED_SQL . ' AS already_started
                  FROM reservations
                  WHERE id = :id AND user_id = :user_id
                  FOR UPDATE'
