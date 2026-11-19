@@ -50,6 +50,7 @@ require BASE_PATH . '/app/controllers/AdminController.php';
 require BASE_PATH . '/app/controllers/OfferController.php';
 require BASE_PATH . '/app/controllers/BookingController.php';
 require BASE_PATH . '/app/controllers/ClientController.php';
+require BASE_PATH . '/app/controllers/ApiController.php';
 
 // Nieobsłużony wyjątek: zapisujemy szczegóły do logu, a użytkownik widzi
 // neutralny widok 500 (bez ścieżek, numerów linii i stack trace).
@@ -114,6 +115,10 @@ switch ($page) {
 
     case 'booking':
         (new BookingController($config))->handle();
+        break;
+
+    case 'api-slots':
+        (new ApiController($config))->slots();
         break;
 
     case 'my-reservations':
