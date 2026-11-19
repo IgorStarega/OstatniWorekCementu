@@ -1,6 +1,6 @@
 <?php
 // =========================================================================
-// Reguła nakładania rezerwacji (#87) — 7 asercji na hasConflict().
+// Reguła nakładania rezerwacji (#87) — 8 asercji na hasConflict().
 //
 // Uruchomienie (stos docker compose musi działać, baza z danymi testowymi):
 //   docker compose exec -T app php tools/test-conflicts.php
@@ -8,8 +8,9 @@
 // Konflikt sprawdzamy wyłącznie przez hasConflict(), nigdy przez INSERT:
 // UNIQUE uq_employee_slot wywaliłby przy identycznym starcie i zamaskował
 // wynik. Skrypt tworzy własną rezerwację testową (pracownik 1, +30 dni,
-// 10:00-11:00), sprawdza 5 blokad i 2 dopuszczenia z wymagań, na koniec
-// zawsze ją usuwa. Idempotentny: usuwa też ślad po przerwanym przebiegu.
+// 10:00-11:00), sprawdza 5 blokad, 2 dopuszczenia z wymagań oraz excludeId
+// (własna rezerwacja nie blokuje siebie), na koniec zawsze ją usuwa.
+// Idempotentny: usuwa też ślad po przerwanym przebiegu.
 // Wyjdzie z kodem 1 przy jakimkolwiek FAIL.
 // =========================================================================
 
