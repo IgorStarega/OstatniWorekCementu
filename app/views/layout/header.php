@@ -44,6 +44,11 @@ $isAdminPage = strpos($currentPage, 'admin-') === 0;
                                 <a class="nav-link<?= in_array($currentPage, ['booking', 'my-reservations', 'reservation'], true) ? ' is-active' : '' ?>" href="/?page=my-reservations">Moje rezerwacje</a>
                             </li>
                         <?php endif; ?>
+                        <?php if (currentUserRole() === 'pracownik'): ?>
+                            <li class="nav-item">
+                                <a class="nav-link<?= $currentPage === 'dashboard' ? ' is-active' : '' ?>" href="/?page=dashboard">Panel</a>
+                            </li>
+                        <?php endif; ?>
                         <?php if (currentUserRole() === 'admin'): ?>
                             <li class="nav-item">
                                 <a class="nav-link<?= $isAdminPage ? ' is-active' : '' ?>" href="/?page=admin-dashboard">Panel administratora</a>

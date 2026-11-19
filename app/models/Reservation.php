@@ -529,4 +529,24 @@ class Reservation
             return ['ok' => false, 'error' => 'Nie udało się anulować rezerwacji.'];
         }
     }
+
+    // Rezerwacje przypisane pracownikowi (panel pracownika), od najbliższej.
+    public function forEmployee(int $employeeId): array
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT r.id, r.reservation_date, r.start_time, r.end_time, r.status,
+                    r.final_price, r.comment,
+                    CONCAT(u.first_name, ' ', u.last_name) AS client_name,
+                    u.phone AS client_phone,
+                    s.name AS service_name, s.duration_minutes
+             FROM reservations r
+             JOIN users u ON u.id = r.user_id
+             JOIN services s ON s.id = r.service_id
+             WHERE r.employee_id = :employee_id
+             ORDER BY r.reservation_date ASC, r.start_time ASC, r.id ASC"
+        );
+        $statement->execute(['employee_id' => $employeeId]);
+
+        return $statement->fetchAll();
+    }
 }
