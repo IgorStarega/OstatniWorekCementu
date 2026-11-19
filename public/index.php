@@ -132,6 +132,10 @@ switch ($page) {
         (new ClientController($config))->show($reservationId);
         break;
 
+    case 'reschedule':
+        (new ClientController($config))->reschedule();
+        break;
+
     case 'login':
         (new AuthController($config))->login();
         break;

@@ -543,7 +543,8 @@ class Reservation
     public function findForUser(int $id, int $userId): ?array
     {
         $statement = $this->pdo->prepare(
-            "SELECT r.id, r.reservation_date, r.start_time, r.end_time, r.status,
+            "SELECT r.id, r.user_id, r.employee_id, r.service_id,
+                    r.reservation_date, r.start_time, r.end_time, r.status,
                     r.final_price, r.comment,
                     s.name AS service_name, s.duration_minutes,
                     CONCAT(eu.first_name, ' ', eu.last_name) AS employee_name
@@ -642,6 +643,148 @@ class Reservation
             error_log('Reservation::cancel: ' . $exception->getMessage());
 
             return ['ok' => false, 'error' => 'Nie udało się anulować rezerwacji.'];
+        }
+    }
+
+    // Przełożenie wizyty przez właściciela. Całość w jednej transakcji:
+    // blokada wiersza, sprawdzenie konfliktu z excludeId i UPDATE muszą
+    // widzieć ten sam stan, inaczej dwa kliknięcia zapiszą nachodzące terminy.
+    public function reschedule(int $id, int $userId, string $date, string $startTime): array
+    {
+        $parsedDate = DateTime::createFromFormat('Y-m-d', $date);
+        if ($parsedDate === false || $parsedDate->format('Y-m-d') !== $date) {
+            return ['ok' => false, 'error' => 'Nieprawidłowa data wizyty.'];
+        }
+
+        if ($date < date('Y-m-d')) {
+            return ['ok' => false, 'error' => 'Data nie może być z przeszłości.'];
+        }
+
+        $normalizedStart = self::normalizeTime($startTime);
+        $parsedStart = DateTime::createFromFormat('H:i:s', $normalizedStart);
+        if ($parsedStart === false || $parsedStart->format('H:i:s') !== $normalizedStart) {
+            return ['ok' => false, 'error' => 'Nieprawidłowa godzina wizyty.'];
+        }
+
+        try {
+            $this->pdo->beginTransaction();
+
+            $statement = $this->pdo->prepare(
+                'SELECT id, status, employee_id, service_id
+                 FROM reservations
+                 WHERE id = :id AND user_id = :user_id
+                 FOR UPDATE'
+            );
+            $statement->execute([
+                'id'      => $id,
+                'user_id' => $userId,
+            ]);
+            $reservation = $statement->fetch();
+
+            if ($reservation === false) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'error' => 'Nie znaleziono rezerwacji.'];
+            }
+
+            $status = (string) $reservation['status'];
+            if (in_array($status, ['anulowana', 'zrealizowana'], true)) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'error' => 'Tej wizyty nie można już zmienić.'];
+            }
+
+            if ($this->isStarted($id)) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'error' => 'Wizyta już się rozpoczęła.'];
+            }
+
+            // Czas trwania usługi blokujemy do końca transakcji — end_time
+            // musi wynikać z danych, które właśnie zatwierdzamy.
+            $statement = $this->pdo->prepare(
+                'SELECT duration_minutes FROM services WHERE id = :id FOR UPDATE'
+            );
+            $statement->execute(['id' => (int) $reservation['service_id']]);
+            $duration = $statement->fetchColumn();
+
+            if ($duration === false) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'error' => 'Usługa jest niedostępna.'];
+            }
+
+            $endTime = (clone $parsedStart)
+                ->modify('+' . (int) $duration . ' minutes')
+                ->format('H:i:s');
+
+            // Blokada wierszy pracownika w nowym dniu — tak samo jak create().
+            $statement = $this->pdo->prepare(
+                'SELECT id FROM reservations
+                 WHERE employee_id = :employee_id AND reservation_date = :date
+                 FOR UPDATE'
+            );
+            $statement->execute([
+                'employee_id' => (int) $reservation['employee_id'],
+                'date'        => $date,
+            ]);
+
+            // Własny wiersz nie jest konfliktem — excludeId jest kluczowe.
+            if ($this->hasConflict(
+                (int) $reservation['employee_id'],
+                $date,
+                $normalizedStart,
+                $endTime,
+                $id
+            )) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'error' => 'Ten termin jest zajęty.'];
+            }
+
+            $statement = $this->pdo->prepare(
+                'UPDATE reservations
+                 SET reservation_date = :date, start_time = :start_time, end_time = :end_time
+                 WHERE id = :id AND user_id = :user_id'
+            );
+            $statement->execute([
+                'date'       => $date,
+                'start_time' => $normalizedStart,
+                'end_time'   => $endTime,
+                'id'         => $id,
+                'user_id'    => $userId,
+            ]);
+
+            // Historia na TYM SAMYM połączeniu — record() nie otwiera
+            // własnej transakcji, więc wpis jest atomowy z UPDATE.
+            (new StatusHistory($this->pdo))->record($id, $status, $status, $userId);
+
+            $this->pdo->commit();
+
+            return ['ok' => true, 'id' => $id, 'error' => null];
+        } catch (PDOException $exception) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+
+            error_log('Reservation::reschedule: ' . $exception->getMessage());
+
+            $driverCode = (int) ($exception->errorInfo[1] ?? 0);
+            if ($exception->getCode() === '23000'
+                || $exception->getCode() === '40001'
+                || $driverCode === 1213) {
+                return ['ok' => false, 'error' => 'Ten termin jest zajęty. Wybierz inny.'];
+            }
+
+            return ['ok' => false, 'error' => 'Nie udało się zmienić terminu wizyty.'];
+        } catch (Throwable $exception) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+
+            error_log('Reservation::reschedule: ' . $exception->getMessage());
+
+            return ['ok' => false, 'error' => 'Nie udało się zmienić terminu wizyty.'];
         }
     }
 
