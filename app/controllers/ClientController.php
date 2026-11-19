@@ -83,6 +83,8 @@ class ClientController
 
         csrf_verify(postString('csrf_token'));
 
+        // ID użytkownika pochodzi wyłącznie z sesji. WHERE w cancel() zawiera
+        // user_id, więc podmiana id w POST nie zmieni cudzego wiersza.
         $pdo = Database::connect($this->config['db']);
         $result = (new Reservation($pdo))->cancel(
             (int) postString('id'),
