@@ -47,6 +47,10 @@ services:
     env_file:
       - .env
     environment:
+      # JEDYNE źródło strefy czasowej bazy. Nie ustawiamy SET time_zone
+      # w dumpie (database/*.sql) — SYSTEM bierze TZ z kontenera i sam
+      # obsługuje zmianę czasu letniego/zimowego. Sztywne +01:00 dawało
+      # złą dobę przy imporcie latem.
       TZ: Europe/Warsaw
     volumes:
       - ./data/mysql:/var/lib/mysql

@@ -299,7 +299,6 @@ VALUES
 
 -- Strefa czasowa importu musi być polska: dump ustawia +00:00, więc bez
 -- tego CURDATE() przy imporcie wieczorem wskazywałby dzień poprzedni.
-SET time_zone = '+01:00';
 
 CREATE TEMPORARY TABLE seq (o INT PRIMARY KEY);
 INSERT INTO seq VALUES (-14),(-13),(-12),(-11),(-10),(-9),(-8),(-7),(-6),(-5),
