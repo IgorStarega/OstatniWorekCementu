@@ -24,6 +24,23 @@ class BookingController
             $this->redirectStep('service');
         }
 
+        // Wejście z karty usługi: ?page=booking&step=service&service_id=X
+        // ustawia usługę i przechodzi od razu do wyboru pracownika.
+        if ($step === 'service' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+            $preselect = filter_input(INPUT_GET, 'service_id', FILTER_VALIDATE_INT);
+            if ($preselect !== false && $preselect > 0
+                && (new Service($pdo))->findActive($preselect) !== null) {
+                $_SESSION['booking'] = [
+                    'service_id'  => $preselect,
+                    'employee_id' => 0,
+                    'date'        => '',
+                    'start_time'  => '',
+                    'comment'     => '',
+                ];
+                $this->redirectStep('employee');
+            }
+        }
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->handlePost($pdo, $step);
             return;
@@ -40,6 +57,30 @@ class BookingController
         $missing = $this->firstMissing($step, $state);
         if ($missing !== null) {
             $this->redirectStep($missing);
+        }
+
+        // Wybór dnia z kalendarza jest linkiem GET. Walidujemy go tak samo
+        // jak formularz: poprawna data, nie z przeszłości i niepuste sloty.
+        if ($step === 'date' && isset($_GET['pick'])) {
+            $pick = is_string($_GET['pick']) ? trim($_GET['pick']) : '';
+            $parsed = DateTime::createFromFormat('Y-m-d', $pick);
+            $dateValid = $parsed !== false && $parsed->format('Y-m-d') === $pick;
+            $employee = $this->employeeForService($pdo, (int) $state['service_id'], (int) $state['employee_id']);
+
+            if ($employee !== null && $dateValid && $pick >= date('Y-m-d')) {
+                $slots = (new AvailabilityService($pdo))
+                    ->slotsFor((int) $employee['id'], (int) $state['service_id'], $pick);
+
+                if ($slots !== []) {
+                    $state['date'] = $pick;
+                    $state['start_time'] = '';
+                    $_SESSION['booking'] = $state;
+                    $this->redirectStep('time');
+                }
+            }
+
+            flash_set('alert', 'Wybrany dzień nie ma wolnych terminów. Wybierz inny.');
+            $this->redirectStep('date');
         }
 
         $this->render($pdo, $step, $state);
@@ -253,6 +294,7 @@ class BookingController
         $employees = [];
         $slots = [];
         $services = [];
+        $calendar = [];
 
         if ($state['service_id'] > 0) {
             $service = (new Service($pdo))->findActive($state['service_id']);
@@ -284,6 +326,17 @@ class BookingController
                 flash_set('alert', 'Wybrany pracownik nie wykonuje już tej usługi.');
                 $this->redirectStep('employee');
             }
+        }
+
+        if ($step === 'date') {
+            // Kalendarz liczy się RAZ tutaj, nie w pętli widoku. Miesiąc
+            // pochodzi z linków strzałek, a bez niego pokazujemy bieżący.
+            $month = is_string($_GET['month'] ?? null) ? $_GET['month'] : '';
+            if (preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month) !== 1) {
+                $month = date('Y-m');
+            }
+
+            $calendar = $this->buildCalendar($pdo, (int) $employee['id'], (int) $service['id'], $month);
         }
 
         if ($step === 'time') {
@@ -447,6 +500,67 @@ class BookingController
         }
 
         return null;
+    }
+
+    // Siatka miesiąca dla kroku daty. Dla każdego dnia sprawdzamy dzień
+    // wolny i wolne sloty — to maksymalnie ~32 zapytania, ale tylko raz
+    // na render, a nie osobno w pętli widoku.
+    private function buildCalendar(PDO $pdo, int $employeeId, int $serviceId, string $month): array
+    {
+        $first = DateTime::createFromFormat('!Y-m-d', $month . '-01');
+        if ($first === false || $first->format('Y-m') !== $month) {
+            $month = date('Y-m');
+            $first = DateTime::createFromFormat('!Y-m-d', $month . '-01');
+        }
+
+        $lastDay = (int) $first->format('t');
+        $today = date('Y-m-d');
+        $availability = new AvailabilityService($pdo);
+        $dayOff = new EmployeeDayOff($pdo);
+
+        // Puste komórki przed pierwszym dniem miesiąca: konwencja 1 = pon.
+        $cells = array_fill(0, (int) $first->format('N') - 1, null);
+
+        for ($day = 1; $day <= $lastDay; $day++) {
+            $date = sprintf('%s-%02d', $month, $day);
+            $slotCount = 0;
+
+            if ($date < $today) {
+                $status = 'past';
+            } elseif ($dayOff->isDayOff($employeeId, $date)) {
+                $status = 'off';
+            } else {
+                $slotCount = count($availability->slotsFor($employeeId, $serviceId, $date));
+                $status = $slotCount > 0 ? 'free' : 'full';
+            }
+
+            $cells[] = [
+                'date'   => $date,
+                'day'    => $day,
+                'status' => $status,
+                'slots'  => $slotCount,
+                'today'  => $date === $today,
+            ];
+        }
+
+        // Dopełnienie do pełnych tygodni — puste komórki na końcu.
+        while (count($cells) % 7 !== 0) {
+            $cells[] = null;
+        }
+
+        $monthNames = [
+            1 => 'stycznia', 2 => 'lutego', 3 => 'marca', 4 => 'kwietnia',
+            5 => 'maja', 6 => 'czerwca', 7 => 'lipca', 8 => 'sierpnia',
+            9 => 'września', 10 => 'października', 11 => 'listopada', 12 => 'grudnia',
+        ];
+
+        return [
+            'month'  => $month,
+            'label'  => $monthNames[(int) $first->format('n')] . ' ' . $first->format('Y'),
+            'prev'   => (clone $first)->modify('-1 month')->format('Y-m'),
+            'next'   => (clone $first)->modify('+1 month')->format('Y-m'),
+            'weeks'  => array_chunk($cells, 7),
+        ];
     }
 
     private function redirectStep(string $step): void

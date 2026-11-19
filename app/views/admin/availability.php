@@ -139,5 +139,106 @@ $dayNames = [
                 </table>
             </div>
         </div>
+
+        <div class="admin-section">
+            <h3>Przerwy</h3>
+            <p class="text-muted">
+                Przerwy odejmują terminy z siatki rezerwacji. Nie da się dodać dwóch
+                nachodzących na siebie przerw tego samego dnia.
+            </p>
+
+            <?php if (!$breaksReady): ?>
+                <p class="admin-empty mb-0">Moduł przerw wymaga migracji 008.</p>
+            <?php else: ?>
+                <form method="post" action="/?page=admin-availability" class="admin-form mb-4">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="hidden" name="action" value="break_add">
+                    <input type="hidden" name="employee_id" value="<?= (int) $selectedEmployeeId ?>">
+
+                    <div class="row align-items-end g-2">
+                        <div class="col-md-3">
+                            <label class="form-label" for="break-day">Dzień</label>
+                            <select class="form-select" id="break-day" name="day_of_week" required>
+                                <?php foreach ($dayNames as $dayOfWeek => $dayName): ?>
+                                    <option value="<?= (int) $dayOfWeek ?>"
+                                        <?= $formBreakDay === $dayOfWeek ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($dayName, ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label" for="break-start">Od</label>
+                            <input class="form-control" id="break-start" type="time" name="start_time"
+                                   value="<?= htmlspecialchars($formBreakStart, ENT_QUOTES, 'UTF-8') ?>" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label" for="break-end">Do</label>
+                            <input class="form-control" id="break-end" type="time" name="end_time"
+                                   value="<?= htmlspecialchars($formBreakEnd, ENT_QUOTES, 'UTF-8') ?>" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label" for="break-label">Etykieta (opcjonalnie)</label>
+                            <input class="form-control" id="break-label" type="text" name="label"
+                                   maxlength="50" value="<?= htmlspecialchars($formBreakLabel, ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary w-100">Dodaj przerwę</button>
+                        </div>
+                    </div>
+                </form>
+
+                <?php if ($breaks === []): ?>
+                    <p class="admin-empty mb-0">Brak przerw w tygodniu pracy tego pracownika.</p>
+                <?php else: ?>
+                    <div class="admin-table-wrap">
+                        <table class="table table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Dzień</th>
+                                    <th scope="col">Przerwa</th>
+                                    <th scope="col">Etykieta</th>
+                                    <th scope="col" class="text-end">Akcje</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($breaks as $break): ?>
+                                    <tr>
+                                        <td data-label="Dzień">
+                                            <strong>
+                                                <?= htmlspecialchars($dayNames[(int) $break['day_of_week']] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                                            </strong>
+                                        </td>
+                                        <td data-label="Przerwa">
+                                            <?= htmlspecialchars(
+                                                substr((string) $break['start_time'], 0, 5)
+                                                . '–'
+                                                . substr((string) $break['end_time'], 0, 5),
+                                                ENT_QUOTES,
+                                                'UTF-8'
+                                            ) ?>
+                                        </td>
+                                        <td data-label="Etykieta">
+                                            <?= htmlspecialchars((string) ($break['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                                        </td>
+                                        <td data-label="Akcje">
+                                            <form method="post" action="/?page=admin-availability"
+                                                  class="admin-actions justify-content-end"
+                                                  data-confirm="Czy usunąć tę przerwę? Operacji nie można cofnąć.">
+                                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
+                                                <input type="hidden" name="action" value="break_delete">
+                                                <input type="hidden" name="employee_id" value="<?= (int) $selectedEmployeeId ?>">
+                                                <input type="hidden" name="id" value="<?= (int) $break['id'] ?>">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">Usuń</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            <?php endif; ?>
+        </div>
     <?php endif; ?>
 <?php endif; ?>

@@ -63,6 +63,22 @@ CREATE TABLE `employee_availability` (
 -- --------------------------------------------------------
 
 --
+-- Struktura tabeli dla tabeli `employee_breaks`
+--
+
+CREATE TABLE `employee_breaks` (
+  `id` int NOT NULL,
+  `employee_id` int NOT NULL,
+  `day_of_week` tinyint NOT NULL,
+  `start_time` time NOT NULL,
+  `end_time` time NOT NULL,
+  `label` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  CONSTRAINT `chk_break_time` CHECK (`start_time` < `end_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Struktura tabeli dla tabeli `employee_days_off`
 --
 
@@ -254,6 +270,13 @@ ALTER TABLE `employee_availability`
   ADD UNIQUE KEY `uq_employee_day` (`employee_id`,`day_of_week`);
 
 --
+-- Indeksy dla tabeli `employee_breaks`
+--
+ALTER TABLE `employee_breaks`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_break_employee_day` (`employee_id`,`day_of_week`);
+
+--
 -- Indeksy dla tabeli `employee_days_off`
 --
 ALTER TABLE `employee_days_off`
@@ -358,6 +381,12 @@ ALTER TABLE `employee_availability`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT dla tabeli `employee_breaks`
+--
+ALTER TABLE `employee_breaks`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT dla tabeli `employee_days_off`
 --
 ALTER TABLE `employee_days_off`
@@ -432,6 +461,12 @@ ALTER TABLE `employees`
 --
 ALTER TABLE `employee_availability`
   ADD CONSTRAINT `employee_availability_ibfk_1` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Ograniczenia dla tabeli `employee_breaks`
+--
+ALTER TABLE `employee_breaks`
+  ADD CONSTRAINT `fk_break_employee` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE;
 
 --
 -- Ograniczenia dla tabeli `employee_days_off`
@@ -883,6 +918,22 @@ LIMIT 1;
 INSERT INTO employee_days_off (employee_id, date, reason)
 VALUES
 (1, @d_off, 'Urlop wypoczynkowy');
+
+
+-- =========================================
+-- PRZERWY W GODZINACH PRACY
+-- Tylko u pracowników, których usługi MIESZCZĄ SIĘ w oknie pracy
+-- z zapasem na przerwę. Jan (480 i 360 min), Piotr (480 min) i Marek
+-- (480 min) mają usługi równe lub prawie równe oknu 8 h — każda przerwa
+-- w środku odcięłaby wszystkie sloty. Adam ma 180 i 240 min w oknie 8 h,
+-- więc przerwa 12:00-12:30 realnie odejmuje terminy, ale zostawia inne.
+-- =========================================
+
+INSERT INTO employee_breaks (employee_id, day_of_week, start_time, end_time, label)
+VALUES
+(3, 1, '12:00:00', '12:30:00', 'Przerwa obiadowa'),
+(3, 3, '12:00:00', '12:30:00', 'Przerwa obiadowa'),
+(3, 5, '12:00:00', '12:30:00', 'Przerwa obiadowa');
 
 
 -- =========================================

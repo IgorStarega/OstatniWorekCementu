@@ -529,11 +529,22 @@ class AdminController
 
         $employeesModel = new Employee($this->database());
         $availabilityModel = new EmployeeAvailability($this->database());
+        $breakModel = new EmployeeBreak($this->database());
         $employees = $employeesModel->all();
         $errors = [];
         $formDay = 0;
         $formStart = '';
         $formEnd = '';
+        $formBreakDay = 0;
+        $formBreakStart = '';
+        $formBreakEnd = '';
+        $formBreakLabel = '';
+
+        // Starsza baza bez migracji 008 ma pokazać komunikat, a nie 500.
+        $breaksReady = missingTables($this->database(), ['employee_breaks']) === [];
+        if (!$breaksReady) {
+            $errors[] = missingTablesMessage(['employee_breaks']);
+        }
 
         $selectedEmployeeId = $_SERVER['REQUEST_METHOD'] === 'POST'
             ? $this->postId('employee_id')
@@ -581,6 +592,97 @@ class AdminController
                         $errors[] = 'Nie udało się zapisać dostępności. Spróbuj ponownie.';
                     }
                 }
+            } elseif ($action === 'break_add') {
+                $formBreakDay = $this->postId('day_of_week');
+                $formBreakStart = trim(postString('start_time'));
+                $formBreakEnd = trim(postString('end_time'));
+                $formBreakLabel = trim(postString('label'));
+
+                if (!$breaksReady) {
+                    $errors[] = 'Nie można dodać przerwy bez tabeli employee_breaks.';
+                }
+
+                if ($formBreakDay < 1 || $formBreakDay > 7) {
+                    $errors[] = 'Wybierz dzień tygodnia od 1 (poniedziałek) do 7 (niedziela).';
+                }
+
+                $breakStart = $this->normalizeTime($formBreakStart);
+                $breakEnd = $this->normalizeTime($formBreakEnd);
+
+                if ($breakStart === null || $breakEnd === null) {
+                    $errors[] = 'Podaj poprawne godziny przerwy w formacie HH:MM lub HH:MM:SS.';
+                } elseif ($breakStart >= $breakEnd) {
+                    $errors[] = 'Początek przerwy musi być wcześniejszy niż jej koniec.';
+                }
+
+                if (mb_strlen($formBreakLabel) > 50) {
+                    $errors[] = 'Etykieta przerwy może mieć maksymalnie 50 znaków.';
+                }
+
+                if ($errors === [] && $breakStart !== null && $breakEnd !== null) {
+                    // Nakładanie z istniejącymi przerwami tego pracownika
+                    // sprawdzamy przed INSERT-em, żeby dać czytelny komunikat.
+                    foreach ($breakModel->forEmployeeDay($selectedEmployeeId, $formBreakDay) as $existing) {
+                        if ($breakStart < (string) $existing['end_time']
+                            && $breakEnd > (string) $existing['start_time']) {
+                            $errors[] = 'Przerwa nakłada się na istniejącą przerwę w tym dniu.';
+                            break;
+                        }
+                    }
+                }
+
+                if ($errors === []) {
+                    try {
+                        $breakModel->create([
+                            'employee_id' => $selectedEmployeeId,
+                            'day_of_week' => $formBreakDay,
+                            'start_time'  => $breakStart,
+                            'end_time'    => $breakEnd,
+                            'label'       => $formBreakLabel !== '' ? $formBreakLabel : null,
+                        ]);
+                        $this->recordAdminAction(
+                            currentUserId(), 'update', 'employee', $selectedEmployeeId,
+                            'pracownik #' . $selectedEmployeeId . ': przerwa dzień ' . $formBreakDay
+                                . ' ' . substr((string) $breakStart, 0, 5) . '–' . substr((string) $breakEnd, 0, 5)
+                        );
+                        $this->flash('status', 'Przerwa została dodana.');
+                        $this->redirect('admin-availability', ['employee_id' => $selectedEmployeeId]);
+                    } catch (Throwable $exception) {
+                        error_log('Błąd zapisu przerwy: ' . $exception->getMessage());
+                        $errors[] = 'Nie udało się zapisać przerwy. Spróbuj ponownie.';
+                    }
+                }
+            } elseif ($action === 'break_delete') {
+                $breakId = $this->postId('id');
+
+                if (!$breaksReady) {
+                    $errors[] = 'Nie można usunąć przerwy bez tabeli employee_breaks.';
+                } elseif ($breakId < 1) {
+                    $errors[] = 'Nie znaleziono przerwy do usunięcia.';
+                } else {
+                    // Usuwamy tylko przerwę wybranego pracownika — cudze ID
+                    // ma nie zmienić danych innego profilu.
+                    $belongs = false;
+                    foreach ($breakModel->forEmployee($selectedEmployeeId) as $break) {
+                        if ((int) $break['id'] === $breakId) {
+                            $belongs = true;
+                            break;
+                        }
+                    }
+
+                    if (!$belongs) {
+                        $errors[] = 'Nie znaleziono przerwy dla wybranego pracownika.';
+                    } elseif ($breakModel->delete($breakId)) {
+                        $this->recordAdminAction(
+                            currentUserId(), 'delete', 'employee', $selectedEmployeeId,
+                            'pracownik #' . $selectedEmployeeId . ': usunięto przerwę'
+                        );
+                        $this->flash('status', 'Przerwa została usunięta.');
+                        $this->redirect('admin-availability', ['employee_id' => $selectedEmployeeId]);
+                    } else {
+                        $errors[] = 'Nie udało się usunąć przerwy. Spróbuj ponownie.';
+                    }
+                }
             } elseif ($action === 'delete') {
                 $formDay = $this->postId('day_of_week');
 
@@ -615,6 +717,9 @@ class AdminController
         $availability = $selectedEmployee !== null
             ? $availabilityModel->forEmployee($selectedEmployeeId)
             : [];
+        $breaks = ($selectedEmployee !== null && $breaksReady)
+            ? $breakModel->forEmployee($selectedEmployeeId)
+            : [];
 
         $this->render('availability', 'Dostępność', [
             'employees'          => $employees,
@@ -623,9 +728,15 @@ class AdminController
             'selectedEmployeeId' => $selectedEmployeeId,
             'selectedEmployee'   => $selectedEmployee,
             'availability'       => $availability,
+            'breaks'             => $breaks,
+            'breaksReady'        => $breaksReady,
             'formDay'            => $formDay,
             'formStart'          => $formStart,
             'formEnd'            => $formEnd,
+            'formBreakDay'       => $formBreakDay,
+            'formBreakStart'     => $formBreakStart,
+            'formBreakEnd'       => $formBreakEnd,
+            'formBreakLabel'     => $formBreakLabel,
         ]);
     }
 

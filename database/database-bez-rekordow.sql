@@ -56,6 +56,22 @@ CREATE TABLE `employee_availability` (
 -- --------------------------------------------------------
 
 --
+-- Struktura tabeli dla tabeli `employee_breaks`
+--
+
+CREATE TABLE `employee_breaks` (
+  `id` int NOT NULL,
+  `employee_id` int NOT NULL,
+  `day_of_week` tinyint NOT NULL,
+  `start_time` time NOT NULL,
+  `end_time` time NOT NULL,
+  `label` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  CONSTRAINT `chk_break_time` CHECK (`start_time` < `end_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Struktura tabeli dla tabeli `employee_days_off`
 --
 
@@ -247,6 +263,13 @@ ALTER TABLE `employee_availability`
   ADD UNIQUE KEY `uq_employee_day` (`employee_id`,`day_of_week`);
 
 --
+-- Indeksy dla tabeli `employee_breaks`
+--
+ALTER TABLE `employee_breaks`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_break_employee_day` (`employee_id`,`day_of_week`);
+
+--
 -- Indeksy dla tabeli `employee_days_off`
 --
 ALTER TABLE `employee_days_off`
@@ -351,6 +374,12 @@ ALTER TABLE `employee_availability`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT dla tabeli `employee_breaks`
+--
+ALTER TABLE `employee_breaks`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT dla tabeli `employee_days_off`
 --
 ALTER TABLE `employee_days_off`
@@ -425,6 +454,12 @@ ALTER TABLE `employees`
 --
 ALTER TABLE `employee_availability`
   ADD CONSTRAINT `employee_availability_ibfk_1` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Ograniczenia dla tabeli `employee_breaks`
+--
+ALTER TABLE `employee_breaks`
+  ADD CONSTRAINT `fk_break_employee` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE;
 
 --
 -- Ograniczenia dla tabeli `employee_days_off`

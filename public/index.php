@@ -34,6 +34,7 @@ require BASE_PATH . '/app/models/Service.php';
 require BASE_PATH . '/app/models/Employee.php';
 require BASE_PATH . '/app/models/EmployeeService.php';
 require BASE_PATH . '/app/models/EmployeeAvailability.php';
+require BASE_PATH . '/app/models/EmployeeBreak.php';
 require BASE_PATH . '/app/models/EmployeeDayOff.php';
 require BASE_PATH . '/app/models/StatusHistory.php';
 require BASE_PATH . '/app/models/AdminLog.php';
@@ -50,6 +51,7 @@ require BASE_PATH . '/app/controllers/AdminController.php';
 require BASE_PATH . '/app/controllers/OfferController.php';
 require BASE_PATH . '/app/controllers/BookingController.php';
 require BASE_PATH . '/app/controllers/ClientController.php';
+require BASE_PATH . '/app/controllers/ApiController.php';
 
 // Nieobsłużony wyjątek: zapisujemy szczegóły do logu, a użytkownik widzi
 // neutralny widok 500 (bez ścieżek, numerów linii i stack trace).
@@ -116,6 +118,10 @@ switch ($page) {
         (new BookingController($config))->handle();
         break;
 
+    case 'api-slots':
+        (new ApiController($config))->slots();
+        break;
+
     case 'my-reservations':
         (new ClientController($config))->index();
         break;
@@ -124,6 +130,10 @@ switch ($page) {
         // Tablica w ?id= nie może wywołać ostrzeżenia — traktujemy ją jak brak ID.
         $reservationId = is_string($_GET['id'] ?? null) ? (int) $_GET['id'] : 0;
         (new ClientController($config))->show($reservationId);
+        break;
+
+    case 'reschedule':
+        (new ClientController($config))->reschedule();
         break;
 
     case 'login':

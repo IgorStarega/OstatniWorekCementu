@@ -20,7 +20,12 @@
 <form method="post" action="/?page=booking&amp;step=time">
     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
 
-    <div class="slot-grid mb-4">
+    <?php // Fallback bez JS: radio są renderowane od razu przez PHP. ?>
+    <div id="slot-grid" class="slot-grid mb-4"
+         data-api-base="/?page=api-slots"
+         data-employee-id="<?= (int) $employee['id'] ?>"
+         data-service-id="<?= (int) $service['id'] ?>"
+         data-date="<?= htmlspecialchars($booking['date'], ENT_QUOTES, 'UTF-8') ?>">
         <?php foreach ($slots as $slot): ?>
             <label class="slot-option">
                 <input class="form-check-input" type="radio" name="start_time"
@@ -30,6 +35,8 @@
             </label>
         <?php endforeach; ?>
     </div>
+
+    <p id="slot-error" class="alert alert-danger d-none" role="alert"></p>
 
     <div class="booking-actions">
         <a class="btn btn-outline-light" href="/?page=booking&amp;step=date&amp;back=1">Wstecz</a>

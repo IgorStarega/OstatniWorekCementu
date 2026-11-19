@@ -79,6 +79,12 @@ $badgeClass = $statusClasses[$reservation['status']] ?? 'text-bg-secondary';
     <a class="btn btn-outline-light" href="/?page=my-reservations">Wróć do rezerwacji</a>
 
     <?php if ($canCancel): ?>
+        <a class="btn btn-outline-light" href="/?page=reschedule&amp;id=<?= (int) $reservation['id'] ?>">
+            Przełóż wizytę
+        </a>
+    <?php endif; ?>
+
+    <?php if ($canCancel): ?>
         <form method="post" action="/?page=reservation">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="id" value="<?= (int) $reservation['id'] ?>">

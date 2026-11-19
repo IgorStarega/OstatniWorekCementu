@@ -400,6 +400,22 @@ VALUES
 
 
 -- =========================================
+-- PRZERWY W GODZINACH PRACY
+-- Tylko u pracowników, których usługi MIESZCZĄ SIĘ w oknie pracy
+-- z zapasem na przerwę. Jan (480 i 360 min), Piotr (480 min) i Marek
+-- (480 min) mają usługi równe lub prawie równe oknu 8 h — każda przerwa
+-- w środku odcięłaby wszystkie sloty. Adam ma 180 i 240 min w oknie 8 h,
+-- więc przerwa 12:00-12:30 realnie odejmuje terminy, ale zostawia inne.
+-- =========================================
+
+INSERT INTO employee_breaks (employee_id, day_of_week, start_time, end_time, label)
+VALUES
+(3, 1, '12:00:00', '12:30:00', 'Przerwa obiadowa'),
+(3, 3, '12:00:00', '12:30:00', 'Przerwa obiadowa'),
+(3, 5, '12:00:00', '12:30:00', 'Przerwa obiadowa');
+
+
+-- =========================================
 -- HISTORIA STATUSÓW REZERWACJI
 -- Pierwszy wpis każdej rezerwacji: old_status = NULL (utworzenie),
 -- autor = administrator (id 7), data = created_at rezerwacji.

@@ -10,6 +10,11 @@ System internetowy do obsługi firmy budowlanej oraz rezerwacji usług budowlany
 * [Baza danych](#baza-danych)
 * [Dostępność pracowników](#dostępność-pracowników)
 * [Proces rezerwacji](#proces-rezerwacji)
+* [Strona główna](#strona-główna)
+* [AJAX — wolne terminy](#ajax--wolne-terminy)
+* [Kalendarz miesiąca](#kalendarz-miesiąca)
+* [Przerwy w godzinach pracy](#przerwy-w-godzinach-pracy)
+* [Przełożenie wizyty](#przełożenie-wizyty)
 * [Role użytkowników](#role-użytkowników)
 * [Dane testowe (Logowanie)](#dane-testowe-logowanie)
 * [Zakres projektu](#zakres-projektu)
@@ -101,7 +106,7 @@ Szczegółowa konfiguracja aplikacji znajduje się w katalogach:
 
 ## Baza danych
 
-System korzysta z relacyjnej bazy danych odpowiedzialnej za przechowywanie informacji związanych z użytkownikami, usługami oraz rezerwacjami. Schemat obejmuje **13 tabel domenowych + schema_migrations (tabela techniczna)**.
+System korzysta z relacyjnej bazy danych odpowiedzialnej za przechowywanie informacji związanych z użytkownikami, usługami oraz rezerwacjami. Schemat obejmuje **14 tabel domenowych + schema_migrations (tabela techniczna)**.
 
 Baza danych umożliwia między innymi przechowywanie:
 
@@ -113,6 +118,7 @@ Baza danych umożliwia między innymi przechowywanie:
 * statusów zleceń i historii ich zmian,
 * logu operacji administratora,
 * dni wolnych i urlopów pracowników,
+* przerw w godzinach pracy pracowników,
 * dodatkowych informacji przekazanych przez klienta.
 
 Pliki związane z bazą danych znajdują się w katalogu: `database/`
@@ -140,11 +146,17 @@ i dzień, `UNIQUE uq_employee_date`) i obsługiwane w panelu administratora.
 2. okno pracy pochodzi z `employee_availability` dla `day_of_week` (1 = poniedziałek, 7 = niedziela); brak wiersza = brak slotów,
 3. urlop lub dzień wolny z `employee_days_off` blokuje cały dzień,
 4. usługa musi być aktywna (`is_active = 1`),
-5. rezerwacje pracownika z tego dnia o statusie innym niż `anulowana` są zajęte,
-6. kandydaci startują co 15 minut i muszą spełnić `start + duration_minutes <= koniec okna`,
-7. dla dzisiejszego dnia sloty z minioną godziną startu są odfiltrowane.
+5. przerwy z `employee_breaks` dla danego dnia odrzucają każdy slot, który nachodzi
+   na przerwę (`start < break_end AND end > break_start`),
+6. rezerwacje pracownika z tego dnia o statusie innym niż `anulowana` są zajęte,
+7. kandydaci startują co 15 minut i muszą spełnić `start + duration_minutes <= koniec okna`,
+8. dla dzisiejszego dnia sloty z minioną godziną startu są odfiltrowane.
 
-**Usługa 480 min przy oknie 8:00–16:00 ma dokładnie jeden slot — 8:00. To celowe, nie błąd.**
+Przerwy pobieramy jedną listą na dzień, a nie osobnym zapytaniem dla każdego slotu.
+
+**Usługa 480 min przy oknie 8:00–16:00 i bez przerwy ma dokładnie jeden slot — 8:00.
+To celowe, nie błąd. Przerwa w środku okna może uniemożliwić rezerwację długiej usługi
+w tym dniu — wtedy kalendarz pokazuje dzień jako pełny.**
 
 ### Reguła konfliktów
 
@@ -214,6 +226,125 @@ i historię; dozwolone przejścia to `oczekująca → potwierdzona`,
 `potwierdzona → zrealizowana` oraz `oczekująca → anulowana`. Te same przejścia
 wymusza `Reservation::updateStatus()`, więc administrator korzysta z tej samej
 mapy i nie może cofnąć statusu.
+
+---
+
+## Strona główna
+
+`HomeController::index()` łączy się z bazą i pokazuje skrót realnej oferty zamiast
+placeholdera z etapu 1:
+
+* hero z nazwą firmy i przyciskami zależnymi od roli (gość: oferta + logowanie,
+  klient: oferta + rezerwacja, pracownik/admin: tylko oferta),
+* trzy liczniki: aktywne usługi, kategorie z aktywnymi usługami i aktywni pracownicy
+  (`Employee::countActive()`),
+* kafle kategorii z linkiem `?page=offer&category=ID` i liczbą usług,
+* maksymalnie sześć polecanych usług z kategorią, czasem trwania, ceną i linkiem
+  do szczegółów,
+* CTA prowadzące do pełnej oferty.
+
+Pusty stan (`$serviceList === []`) pokazuje czytelny komunikat zamiast białej strony.
+
+---
+
+## AJAX — wolne terminy
+
+Endpoint `/?page=api-slots` (`ApiController::slots()`) jest drugim punktem wejścia
+do tej samej logiki co formularz rezerwacji — nie ma osobnej, uproszczonej walidacji.
+
+Parametry GET:
+
+| Parametr | Znaczenie |
+|---|---|
+| `employee_id` | ID pracownika |
+| `service_id` | ID aktywnej usługi |
+| `date` | data `Y-m-d` |
+
+Odpowiedź 200 (jedna linia JSON):
+
+```json
+{"ok":true,"date":"2026-11-20","slots":["08:00","08:15"],"count":2}
+```
+
+Walidacja jest identyczna jak w formularzu: usługa musi istnieć i być aktywna,
+pracownik musi wykonywać tę usługę, data przechodzi round-trip `createFromFormat`,
+a data z przeszłości jest odrzucana. Błędy walidacji dają **422** z
+`{"ok":false,"error":"..."}`. Gość i role inne niż `klient` dostają **403 JSON**
+(nie HTML przekierowania). Wyjątki PDO trafiają wyłącznie do `error_log()`;
+klient widzi `{"ok":false,"error":"Błąd serwera."}` i kod **500**.
+
+W kroku godziny siatka radio pozostaje w HTML jako fallback. `public/js/script.js`
+przy istnieniu `#slot-grid` pobiera terminy przez `fetch()`, przerysowuje siatkę
+i pokazuje błąd w `#slot-error` (bez `alert()` i bez inline'owych `onclick`).
+
+---
+
+## Kalendarz miesiąca
+
+Krok daty (`app/views/booking/date.php`) pokazuje siatkę miesiąca zamiast samego
+`<input type="date">`. `BookingController::buildCalendar()` liczy dni **raz na render**,
+poza pętlą widoku:
+
+* `past` — data wcześniejsza niż dziś,
+* `off` — dzień wolny z `employee_days_off`,
+* `free` — `slotsFor()` zwraca niepustą listę (badge z liczbą slotów, zielony),
+* `full` — brak slotów (badge szary `0`).
+
+Dni `free` są linkami `?page=booking&step=date&pick=YYYY-MM-DD`, `past` i `off`
+pozostają nieklikalnymi elementami. Strzałki `←`/`→` zmieniają miesiąc parametrem
+`month=YYYY-MM`. Wybór `pick` jest walidowany tak samo jak formularz: poprawna data,
+nie z przeszłości i niepuste `slotsFor()`. Pod tabelą nadal jest `input type="date"`
+jako alternatywa dostępnościowa.
+
+**Ograniczenie wydajności:** jeden dzień to jedno wywołanie `slotsFor()`, czyli
+maksymalnie około 30–32 zapytań na wyświetlenie miesiąca dla jednego pracownika.
+To akceptowalne przy tej skali projektu; przy większym ruchu należałoby policzyć
+dostępność jednym zapytaniem zbiorczym.
+
+---
+
+## Przerwy w godzinach pracy
+
+Przerwy są w tabeli `employee_breaks` (migracja `008-przerwy.sql`), a nie w
+`employee_availability`, bo `UNIQUE uq_employee_day` blokuje drugi wiersz na ten
+sam dzień tygodnia. Kolumny: `employee_id`, `day_of_week` (1–7), `start_time`,
+`end_time`, opcjonalna `label` (maks. 50 znaków). Ograniczenie `chk_break_time`
+pilnuje `start_time < end_time`, a FK kasuje przerwy razem z pracownikiem.
+
+`EmployeeBreak` udostępnia `forEmployee()`, `forEmployeeDay()`, `create()` i `delete()`.
+`AvailabilityService::slotsFor()` pobiera przerwy **jedną listą na dzień** i odrzuca
+kandydata, gdy `start < break_end AND end > break_start` — ta sama reguła nakładania
+co `hasConflict()`. Panel `?page=admin-availability` ma sekcję „Przerwy” z formularzem
+(dzień, od, do, etykieta), listą istniejących wpisów i usuwaniem przez POST + CSRF.
+Serwer sprawdza dzień 1–7, kolejność godzin i nakładanie z istniejącymi przerwami.
+
+Przerwy mają sens tylko u pracowników, których usługa jest krótsza niż okno pracy.
+Usługa 480 min w oknie 8-godzinnym nie ma miejsca na przerwę — każda przerwa w środku
+odcięłaby jedyny możliwy slot. W danych testowych przerwy ma wyłącznie Adam Wiśniewski
+(usługi 180 i 240 min): poniedziałek, środa i piątek 12:00–12:30. Przerwa realnie
+odejmuje terminy, ale zostawia inne — np. usługa 240 min startuje w poniedziałek
+o 08:00, a 12:00 wypada.
+
+---
+
+## Przełożenie wizyty
+
+Klient może zmienić termin własnej przyszłej wizyty: `?page=reschedule&id=ID`
+(`ClientController::reschedule()`). GET pokazuje formularz daty i siatkę wolnych
+godzin, POST zapisuje nowy termin.
+
+`Reservation::reschedule()` działa w jednej transakcji:
+
+1. `SELECT ... FOR UPDATE` na wierszu rezerwacji z warunkiem `id` i `user_id`,
+2. odrzucenie statusów `anulowana` i `zrealizowana` oraz wizyt już rozpoczętych,
+3. odczyt `services.duration_minutes` z `FOR UPDATE` i wyliczenie `end_time`,
+4. `hasConflict()` z **`excludeId = $id`**, żeby rezerwacja nie kolidowała sama ze sobą,
+5. `UPDATE` daty i godzin oraz wpis w `status_history` na tym samym połączeniu PDO,
+6. rollback i czytelny komunikat przy `23000`, `40001` lub deadlocku `1213`.
+
+Cudze ID daje **404**, tak samo jak w szczegółach i anulowaniu. Link „Przełóż wizytę”
+pokazuje się obok „Anuluj rezerwację” tylko wtedy, gdy wizyta nie jest anulowana
+i jeszcze się nie rozpoczęła.
 
 ---
 
@@ -304,18 +435,19 @@ Główna struktura repozytorium:
 > OstatniWorekCementu/
 > ├── app/                # logika aplikacji (MVC)
 > │   ├── controllers/    # kontrolery (Home, Auth, PasswordReset, EmailVerification, Profile,
-> │   │                   #            Dashboard, Admin, Offer, Booking, Client)
+> │   │                   #            Dashboard, Admin, Offer, Booking, Client, Api)
 > │   ├── models/         # modele (Database, User, PasswordReset, EmailVerification, EmailSend,
 > │   │                   #         ServiceCategory, Service, Employee, EmployeeService,
-> │   │                   #         EmployeeAvailability, EmployeeDayOff, Reservation,
-> │   │                   #         StatusHistory, AdminLog, Stats)
-> │   ├── services/       # AvailabilityService — wyliczanie wolnych slotów
+> │   │                   #         EmployeeAvailability, EmployeeBreak, EmployeeDayOff,
+> │   │                   #         Reservation, StatusHistory, AdminLog, Stats)
+> │   ├── services/       # AvailabilityService — wyliczanie wolnych slotów z przerwami
 > │   ├── helpers/        # pomocniki (CSRF, autoryzacja, walidacja, paginacja, adresy URL, tokeny, flash)
-> │   └── views/          # widoki (layout, strony, offer/, booking/, client/, dashboard/, admin/, errors/ — 403/404/500)
+> │   └── views/          # widoki (layout, strony, offer/, booking/ — w tym kalendarz,
+> │                       #         client/ — w tym reschedule, dashboard/, admin/, errors/ — 403/404/500)
 > ├── config/             # konfiguracja aplikacji i serwera MySQL
 > │   └── mysql/
 > ├── database/           # schemat, dane testowe i scalony zrzut
-> │   └── migrations/     # migracje dla istniejących baz (002–007)
+> │   └── migrations/     # migracje dla istniejących baz (002–008)
 > ├── docker/             # obraz PHP, php.ini i konfiguracja Apache
 > │   └── php/
 > │       └── entrypoint.sh # automatyczne migracje przed startem Apache
@@ -329,7 +461,7 @@ Główna struktura repozytorium:
 > ├── tools/              # narzędzia CLI (migrate.php, migrate.sh, qa-smoke.sh)
 > │   ├── migrate.php     # runner migracji PDO (uruchamiany w entrypoint.sh)
 > │   ├── test-conflicts.php # 7 przypadków nakładania + excludeId (8/8 PASS)
-> │   └── check-slots.php # weryfikacja algorytmu dostępności (6/6 PASS)
+> │   └── check-slots.php # weryfikacja algorytmu dostępności z przerwami (8/8 PASS)
 > ├── .env.example        # wzór konfiguracji lokalnej
 > ├── docker-compose.yml  # stos lokalny (app + db + phpMyAdmin)
 > ├── LICENSE
@@ -524,6 +656,8 @@ migracje można też uruchomić ręcznie przez klienta `mysql`:
 
 `docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < database/migrations/007-dni-wolne.sql`
 
+`docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < database/migrations/008-przerwy.sql`
+
 Migracje są idempotentne: sprawdzają `information_schema` przed każdym `ALTER TABLE`
 (MySQL 8.0 nie ma `ADD COLUMN IF NOT EXISTS`), więc ponowne uruchomienie nic nie psuje.
 Migracja `002` dodaje `users.failed_attempts`, `users.locked_until` i tabelę `password_resets`;
@@ -532,8 +666,9 @@ a istniejące konta oznacza jako potwierdzone (`email_verified_at = NOW()`), że
 dostępu po włączeniu weryfikacji e-mail. `004` naprawia podwójne kodowanie polskich znaków
 w danych (`Ocieplanie budynkÃ³w` → `Ocieplanie budynków`); poprawione kolumny nie są ruszane
 przy kolejnym uruchomieniu. `005` dodaje historię zmian statusów rezerwacji (`status_history`),
-`006` — log operacji administratora (`admin_log`), a `007` — dni wolne i urlopy pracowników
-(`employee_days_off`). Po wszystkich migracjach baza ma **13 tabel domenowych + schema_migrations (tabela techniczna)**.
+`006` — log operacji administratora (`admin_log`), `007` — dni wolne i urlopy pracowników
+(`employee_days_off`), a `008` — przerwy w godzinach pracy (`employee_breaks`).
+Po wszystkich migracjach baza ma **14 tabel domenowych + schema_migrations (tabela techniczna)**.
 
 **(b) Dane są nieważne** — zaczynamy od zera:
 
@@ -544,15 +679,17 @@ przy kolejnym uruchomieniu. `005` dodaje historię zmian statusów rezerwacji (`
 
 ## Testy
 
-Automatyczny smoke test to **74 asercje w kodzie** (`grep -c 'pass "' tools/qa-smoke.sh`),
-a w pełnym przebiegu **105/105 PASS** — część asercji powtarzają pętle (role i strony
+Automatyczny smoke test to **89 asercji w kodzie** (`grep -c 'pass "' tools/qa-smoke.sh`),
+a w pełnym przebiegu **120/120 PASS** — część asercji powtarzają pętle (role i strony
 panelu). Zakres: sesja, CSRF, rejestracja z linkiem, weryfikacja, XSS, IDOR (GET i POST),
 trzy role, blokada konta, dostęp do panelu administratora, operacje destrukcyjne,
 paginacja i wyszukiwanie użytkowników, favicon, ochrona własnego konta, schemat bazy,
 migracje, kodowanie polskich znaków, retencja, historia statusów, log operacji, dni
-wolne, statystyki, eksport CSV, proces rezerwacji (kolejność kroków, data z przeszłości,
-godzina poza slotami, pracownik nieprzypisany do usługi), panel klienta i pracownika
-oraz znikanie nieaktywnej usługi z oferty. Uruchamiamy przeciw działającemu stosowi:
+wolne, przerwy, statystyki, eksport CSV, proces rezerwacji (kolejność kroków, data
+z przeszłości, godzina poza slotami, pracownik nieprzypisany do usługi), stronę główną,
+AJAX `api-slots` (sukces, 403, 422), kalendarz miesiąca, przełożenie wizyty i jego IDOR,
+panel klienta i pracownika oraz znikanie nieaktywnej usługi z oferty. Uruchamiamy
+przeciw działającemu stosowi:
 
 ```bash
 bash tools/qa-smoke.sh
@@ -573,7 +710,7 @@ Wynik to `X/Y PASS`; kod wyjścia `1`, gdy cokolwiek padło. Rzeczy wymagające 
 bash tools/qa-smoke.sh
 ```
 
-Wynik: `105/105 PASS`, 0 FAIL, 2 SKIP (74 asercje w kodzie skryptu, resztę dają pętle).
+Wynik: `120/120 PASS`, 0 FAIL, 2 SKIP (89 asercji w kodzie skryptu, resztę dają pętle).
 SKIP-y wymagają przeglądarki lub restartu kontenera — opisane poniżej.
 
 ### Manualnie — czego automat nie sprawdzi
@@ -668,6 +805,23 @@ Podczas wdrażania aplikacji w środowisku produkcyjnym należy zadbać między 
 
 ## Funkcje dodatkowe
 
+### Etap 4 — funkcje dodatkowe (wdrożone)
+
+* **AJAX-owe terminy:** endpoint `?page=api-slots` zwraca JSON z walidacją identyczną
+  jak formularz; siatka radio w kroku godziny pozostaje fallbackiem bez JavaScriptu.
+* **Kalendarz miesiąca:** krok daty pokazuje dni z liczbą wolnych slotów, z podziałem
+  na przeszłe, dni wolne, wolne i pełne; liczba zapytań jest ograniczona do ~32 na render.
+* **Przerwy w godzinach pracy:** tabela `employee_breaks` i migracja 008; przerwy
+  realnie odejmują sloty, a administrator zarządza nimi w module dostępności.
+* **Przełożenie wizyty:** klient może zmienić termin własnej przyszłej wizyty;
+  `Reservation::reschedule()` używa `excludeId` w `hasConflict()` i blokady wiersza.
+* **Strona główna z realną ofertą:** liczniki, kategorie i polecane usługi z bazy
+  zamiast placeholdera z etapu 1.
+
+**Świadomie poza zakresem:** e-maile i przypomnienia o wizytach. Na deployu nie ma
+transportu SMTP — Cloudflare Tunnel nie przepuszcza SMTP, a port 25 jest zablokowany.
+Linki weryfikacji i resetu hasła są dlatego pokazywane na ekranie w trybie lokalnym.
+
 ### Etap 3 — panel administratora (wdrożone)
 
 * **Wspólny layout panelu:** sidebar z dziewięcioma modułami (Dashboard, Kategorie, Usługi,
@@ -726,8 +880,9 @@ Podczas wdrażania aplikacji w środowisku produkcyjnym należy zadbać między 
 
 * **Zamrożenie ceny w rezerwacji:** tabela `reservations` przechowuje `final_price` niezależnie od cennika — wdrożone.
 * **Wyszukiwanie i paginacja list administracyjnych:** wdrożone w etapie 3 (rezerwacje i użytkownicy).
-* **AJAX z terminami:** pozostaje zaplanowane na późniejszy etap. **Historia zmian
-  statusów rezerwacji jest już wdrożona** w `status_history` i obsługiwana w panelu
+* **AJAX z terminami:** zrealizowany w etapie 4 — `?page=api-slots` z walidacją
+  identyczną jak formularz i fallbackiem bez JavaScriptu. **Historia zmian
+  statusów rezerwacji** jest wdrożona w `status_history` i obsługiwana w panelu
   administratora.
 
 ---
@@ -773,10 +928,13 @@ Projekt jest rozwijany w ramach prac nad systemem rezerwacji usług budowlanych.
 | 4 | Panel klienta: lista, szczegóły, historia statusów, anulowanie | ukończone |
 | 5 | Panel pracownika: dziś / przyszłe / historia, zmiana statusu | ukończone |
 | 6 | Ochrona IDOR (404 dla cudzych ID) i CSRF wszystkich POST | ukończone |
-| 7 | Testy 45–55 w `tools/qa-smoke.sh` + `test-conflicts.php` + `check-slots.php` | ukończone |
+| 7 | Testy 45–69 w `tools/qa-smoke.sh` + `test-conflicts.php` + `check-slots.php` | ukończone |
 | 8 | Dokumentacja procesu, reguły konfliktów i algorytmu dostępności | ukończone |
 | 9 | UX/responsywność 375 px (#99) | ukończone (CSS, empty states, przyciski 44 px; checklista manualna) |
-| 10 | AJAX z terminami | nie zrealizowane (poza zakresem etapu 4) |
+| 10 | AJAX z terminami (`?page=api-slots` + fallback radio) | ukończone |
+| 11 | Kalendarz miesiąca z liczbą wolnych terminów | ukończone |
+| 12 | Przerwy w godzinach pracy (migracja 008) | ukończone |
+| 13 | Przełożenie wizyty przez klienta (`excludeId`) | ukończone |
 
 ### Etap 3 — panel administratora
 
@@ -815,5 +973,5 @@ Projekt jest rozwijany w ramach prac nad systemem rezerwacji usług budowlanych.
 | 14 | Weryfikacja adresu e-mail po rejestracji, polityka B (#72) | ukończone |
 | 15 | Usunięcie transportu poczty (linki na ekranie) i minimalizacja `.env` | ukończone |
 
-Kolejne elementy systemu mogą obejmować AJAX-owe odświeżanie terminów, powiadomienia
+Kolejne elementy systemu mogą obejmować powiadomienia
 o rezerwacjach oraz dalsze usprawnienia obsługi zleceń.

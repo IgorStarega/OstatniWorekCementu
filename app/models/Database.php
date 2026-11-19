@@ -16,7 +16,8 @@ class Database
             $settings['host'],
             $settings['port'],
             $settings['name'],
-            $settings['charset']
+            // Domyślnie utf8mb4 — połączenia CLI mogą pominąć ten klucz.
+            $settings['charset'] ?? 'utf8mb4'
         );
 
         self::$connection = new PDO($dsn, $settings['user'], $settings['pass'], [
