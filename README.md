@@ -200,7 +200,10 @@ Każdy krok jest walidowany po stronie serwera:
 * **godzina** — wartość musi być dokładnie jedną z listy `slotsFor()`; brak własnej
   arytmetyki godzin,
 * **potwierdzenie** — ponowne sprawdzenie usługi, pracownika i slotu, potem
-  `Reservation::create()` w jednej transakcji. Zajęty termin kończy się komunikatem
+  `Reservation::create()` w jednej transakcji. Model dodatkowo waliduje datę
+  i godzinę, istnienie okna `employee_availability`, brak wpisu w
+  `employee_days_off` oraz zmieszczenie całej usługi w oknie pracy — także
+  wtedy, gdy formularz zostanie pominięty. Zajęty termin kończy się komunikatem
   i powrotem do wyboru godziny.
 
 Po zapisie klient trafia na `?page=my-reservations` z komunikatem zawierającym numer
@@ -208,7 +211,9 @@ rezerwacji. Panel klienta dzieli listę na nadchodzące i historię, pokazuje sz
 z historią statusów i pozwala anulować wyłącznie przyszłą, nieanulowaną wizytę
 (serwer sprawdza datę ponownie). Panel pracownika pokazuje wizyty na dziś, przyszłe
 i historię; dozwolone przejścia to `oczekująca → potwierdzona`,
-`potwierdzona → zrealizowana` oraz `oczekująca → anulowana`.
+`potwierdzona → zrealizowana` oraz `oczekująca → anulowana`. Te same przejścia
+wymusza `Reservation::updateStatus()`, więc administrator korzysta z tej samej
+mapy i nie może cofnąć statusu.
 
 ---
 
