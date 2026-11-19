@@ -131,10 +131,10 @@ try {
     );
 
     // --- 2. Nakładanie z innym startem (UNIQUE by tego nie złapał) --------
-    // Istnieje już rezerwacja 08:00-14:00 (usługa 2, 360 min); start 10:30
-    // to inny start_time, więc uq_employee_slot milczy — blokuje dopiero
-    // reguła hasConflict().
-    $overlap = $reservations->create(5, 2, 1, $date, '10:30', 'test-create overlap');
+    // Istnieje już rezerwacja 08:00-14:00 (usługa 2, 360 min); start 09:30
+    // mieści się w oknie 08:00-16:00 i nachodzi na 08:00-14:00, więc
+    // uq_employee_slot milczy — blokuje dopiero reguła hasConflict().
+    $overlap = $reservations->create(5, 2, 1, $date, '09:30', 'test-create overlap');
 
     $assert(
         'create() nachodzący na istniejącą rezerwację — ok=false',

@@ -191,6 +191,23 @@ class Reservation
         try {
             $this->pdo->beginTransaction();
 
+            // Data i godzina są walidowane również tutaj — model nie może
+            // zakładać, że przyszedł poprawny formularz.
+            $parsedDate = DateTime::createFromFormat('Y-m-d', $date);
+            if ($parsedDate === false || $parsedDate->format('Y-m-d') !== $date) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'id' => null, 'error' => 'Nieprawidłowa data rezerwacji.'];
+            }
+
+            $normalizedStart = self::normalizeTime($startTime);
+            $parsedStart = DateTime::createFromFormat('H:i:s', $normalizedStart);
+            if ($parsedStart === false || $parsedStart->format('H:i:s') !== $normalizedStart) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'id' => null, 'error' => 'Nieprawidłowa godzina rezerwacji.'];
+            }
+
             // Cena i czas trwania zablokowane do końca transakcji (FOR UPDATE),
             // żeby final_price pochodził z odczytu, który właśnie zatwierdzamy.
             $statement = $this->pdo->prepare(
@@ -208,7 +225,7 @@ class Reservation
 
             // Koniec rezerwacji liczy SERWER z czasu trwania usługi —
             // formularz nigdy nie dostarcza end_time.
-            $endTime = (new DateTime($startTime))
+            $endTime = (clone $parsedStart)
                 ->modify('+' . (int) $service['duration_minutes'] . ' minutes')
                 ->format('H:i:s');
 
@@ -233,6 +250,56 @@ class Reservation
                 $this->pdo->rollBack();
 
                 return ['ok' => false, 'id' => null, 'error' => 'Ten pracownik nie wykonuje wybranej usługi.'];
+            }
+
+            // Okno pracy pracownika w dniu tygodnia rezerwacji. Brak wiersza
+            // oznacza, że pracownik wtedy nie pracuje — formularz nie może
+            // być jedyną barierą.
+            $statement = $this->pdo->prepare(
+                'SELECT start_time, end_time
+                 FROM employee_availability
+                 WHERE employee_id = :employee_id AND day_of_week = :day_of_week
+                 LIMIT 1'
+            );
+            $statement->execute([
+                'employee_id' => $employeeId,
+                'day_of_week' => (int) $parsedDate->format('N'),
+            ]);
+            $window = $statement->fetch();
+
+            if ($window === false) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'id' => null, 'error' => 'Pracownik nie pracuje w wybranym dniu.'];
+            }
+
+            // Urlop/dzień wolny blokuje cały dzień, niezależnie od okna.
+            $statement = $this->pdo->prepare(
+                'SELECT COUNT(*) FROM employee_days_off
+                 WHERE employee_id = :employee_id AND date = :date'
+            );
+            $statement->execute([
+                'employee_id' => $employeeId,
+                'date'        => $date,
+            ]);
+
+            if ((int) $statement->fetchColumn() > 0) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'id' => null, 'error' => 'Pracownik ma dzień wolny w wybranym dniu.'];
+            }
+
+            // Start i koniec muszą zmieścić się w oknie pracy. End <= start
+            // oznacza przejście przez północ, czyli wyjście poza okno.
+            $startMinutes = self::timeToMinutes($startTime);
+            $endMinutes = self::timeToMinutes($endTime);
+
+            if ($endMinutes <= $startMinutes
+                || $startMinutes < self::timeToMinutes($window['start_time'])
+                || $endMinutes > self::timeToMinutes($window['end_time'])) {
+                $this->pdo->rollBack();
+
+                return ['ok' => false, 'id' => null, 'error' => 'Termin nie mieści się w godzinach pracy pracownika.'];
             }
 
             // Blokada wierszy rezerwacji pracownika z tego dnia: dwa równoległe
@@ -364,6 +431,14 @@ class Reservation
         }
 
         return $time;
+    }
+
+    // 'HH:MM[:SS]' -> minuty od północy (do porównań z oknem pracy).
+    private static function timeToMinutes(string $time): int
+    {
+        $parts = explode(':', self::normalizeTime($time));
+
+        return ((int) $parts[0]) * 60 + (int) ($parts[1] ?? 0);
     }
 
     private function baseSelect(): string
