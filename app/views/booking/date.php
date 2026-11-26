@@ -21,7 +21,7 @@
            aria-label="Następny miesiąc">&rarr;</a>
     </div>
 
-    <div class="calendar-wrap mb-4">
+    <div class="table-wrap calendar-wrap mb-4">
         <table class="calendar">
             <thead>
                 <tr>

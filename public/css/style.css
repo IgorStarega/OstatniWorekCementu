@@ -1630,3 +1630,8 @@ textarea:focus-visible,
     outline: 2px solid var(--akcent);
     outline-offset: 2px;
 }
+
+/* Kalendarz ma wlasny kontener, wiec nie wymuszamy tabelarycznego min-width. */
+.calendar-wrap table.calendar {
+    min-width: 0;
+}
