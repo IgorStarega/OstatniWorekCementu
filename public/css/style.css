@@ -1616,3 +1616,17 @@ button:not(.btn):not(.navbar-toggler):active {
         min-width: 44px;
     }
 }
+
+/* --- Widoczny fokus klawiatury (WCAG 2.4.7) ----------------------------- */
+a:focus-visible,
+button:focus-visible,
+.btn:focus-visible,
+.nav-link:focus-visible,
+.navbar-toggler:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.slot-option:focus-within {
+    outline: 2px solid var(--akcent);
+    outline-offset: 2px;
+}

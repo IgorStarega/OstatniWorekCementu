@@ -27,8 +27,9 @@
          data-service-id="<?= (int) $service['id'] ?>"
          data-date="<?= htmlspecialchars($booking['date'], ENT_QUOTES, 'UTF-8') ?>">
         <?php foreach ($slots as $slot): ?>
-            <label class="slot-option">
+            <label class="slot-option" for="slot-<?= htmlspecialchars(str_replace(':', '', $slot), ENT_QUOTES, 'UTF-8') ?>">
                 <input class="form-check-input" type="radio" name="start_time"
+                       id="slot-<?= htmlspecialchars(str_replace(':', '', $slot), ENT_QUOTES, 'UTF-8') ?>"
                        value="<?= htmlspecialchars($slot, ENT_QUOTES, 'UTF-8') ?>" required
                     <?= $booking['start_time'] === $slot ? 'checked' : '' ?>>
                 <span class="slot-option-time"><?= htmlspecialchars($slot, ENT_QUOTES, 'UTF-8') ?></span>

@@ -18,8 +18,9 @@
 
         <div class="d-grid gap-2 mb-4">
             <?php foreach ($services as $service): ?>
-                <label class="booking-choice">
+                <label class="booking-choice" for="booking-service-<?= (int) $service['id'] ?>">
                     <input class="form-check-input" type="radio" name="service_id"
+                           id="booking-service-<?= (int) $service['id'] ?>"
                            value="<?= (int) $service['id'] ?>" required
                         <?= (int) $booking['service_id'] === (int) $service['id'] ? 'checked' : '' ?>>
                     <span class="booking-choice-body">
