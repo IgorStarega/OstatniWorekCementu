@@ -90,7 +90,7 @@
     <?php if ($services === []): ?>
         <p class="admin-empty mb-0">Nie ma jeszcze żadnej usługi. Dodaj pierwszą powyżej.</p>
     <?php else: ?>
-        <div class="admin-table-wrap">
+        <div class="table-wrap admin-table-wrap">
             <table class="table table-hover align-middle">
                 <thead>
                     <tr>

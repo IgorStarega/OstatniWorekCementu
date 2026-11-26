@@ -107,7 +107,7 @@ $returnSuffix = $returnQuery === ''
         <?php if ($reservations === []): ?>
             <p class="admin-empty mb-0">Brak rezerwacji spełniających kryteria.</p>
         <?php else: ?>
-            <div class="admin-table-wrap">
+            <div class="table-wrap admin-table-wrap">
                 <table class="table table-hover align-middle">
                     <thead>
                         <tr>
@@ -276,7 +276,7 @@ $returnSuffix = $returnQuery === ''
         <?php elseif ($history === []): ?>
             <p class="admin-empty mb-0">Brak historii zmian.</p>
         <?php else: ?>
-            <div class="admin-table-wrap">
+            <div class="table-wrap admin-table-wrap">
                 <table class="table table-hover align-middle">
                     <thead>
                         <tr>

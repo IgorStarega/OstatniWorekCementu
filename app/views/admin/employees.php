@@ -79,7 +79,7 @@
     <?php if ($employees === []): ?>
         <p class="admin-empty mb-0">Nie ma jeszcze żadnego pracownika. Dodaj pierwszego powyżej.</p>
     <?php else: ?>
-        <div class="admin-table-wrap">
+        <div class="table-wrap admin-table-wrap">
             <table class="table table-hover align-middle">
                 <thead>
                     <tr>

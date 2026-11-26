@@ -63,7 +63,7 @@ $dayNames = [
                 <?= htmlspecialchars((string) $selectedEmployee['first_name'] . ' ' . (string) $selectedEmployee['last_name'], ENT_QUOTES, 'UTF-8') ?>
             </h3>
 
-            <div class="admin-table-wrap">
+            <div class="table-wrap admin-table-wrap">
                 <table class="table table-hover align-middle">
                     <thead>
                         <tr>
@@ -191,7 +191,7 @@ $dayNames = [
                 <?php if ($breaks === []): ?>
                     <p class="admin-empty mb-0">Brak przerw w tygodniu pracy tego pracownika.</p>
                 <?php else: ?>
-                    <div class="admin-table-wrap">
+                    <div class="table-wrap admin-table-wrap">
                         <table class="table table-hover align-middle">
                             <thead>
                                 <tr>

@@ -29,7 +29,7 @@ $actionClasses = [
         <p class="admin-empty mb-0">Brak zapisanych operacji.</p>
     <?php else: ?>
         <p class="text-muted">Wyświetlono <?= count($entries) ?> najnowszych wpisów.</p>
-        <div class="admin-table-wrap">
+        <div class="table-wrap admin-table-wrap">
             <table class="table table-hover align-middle">
                 <thead>
                     <tr>

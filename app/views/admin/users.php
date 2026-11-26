@@ -82,7 +82,7 @@ $actionUrl = '/?' . http_build_query($actionParams);
     <?php if ($users === []): ?>
         <p class="admin-empty mb-0">Brak użytkowników spełniających kryteria.</p>
     <?php else: ?>
-        <div class="admin-table-wrap">
+        <div class="table-wrap admin-table-wrap">
             <table class="table table-hover align-middle">
                 <thead>
                     <tr>
