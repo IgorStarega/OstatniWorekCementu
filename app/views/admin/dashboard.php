@@ -154,7 +154,7 @@ $reservationHeading = $upcoming !== [] ? 'Najbliższe rezerwacje' : 'Ostatnie re
             <?php elseif ($upcomingDaysOff === []): ?>
                 <p class="admin-empty mb-0">Brak zaplanowanych dni wolnych.</p>
             <?php else: ?>
-                <div class="admin-table-wrap">
+                <div class="table-wrap admin-table-wrap">
                     <table class="table table-hover align-middle mb-0">
                         <thead>
                             <tr>
@@ -197,7 +197,7 @@ $reservationHeading = $upcoming !== [] ? 'Najbliższe rezerwacje' : 'Ostatnie re
             <?php if ($topServices === []): ?>
                 <p class="admin-empty mb-0">Brak danych o rezerwacjach usług.</p>
             <?php else: ?>
-                <div class="admin-table-wrap">
+                <div class="table-wrap admin-table-wrap">
                     <table class="table table-hover align-middle mb-0">
                         <thead>
                             <tr>
@@ -237,7 +237,7 @@ $reservationHeading = $upcoming !== [] ? 'Najbliższe rezerwacje' : 'Ostatnie re
             <?php if ($workload === []): ?>
                 <p class="admin-empty mb-0">Brak danych o pracownikach.</p>
             <?php else: ?>
-                <div class="admin-table-wrap">
+                <div class="table-wrap admin-table-wrap">
                     <table class="table table-hover align-middle mb-0">
                         <thead>
                             <tr>
@@ -283,7 +283,7 @@ $reservationHeading = $upcoming !== [] ? 'Najbliższe rezerwacje' : 'Ostatnie re
     <?php if ($reservationRows === []): ?>
         <p class="admin-empty mb-0">Brak rezerwacji do wyświetlenia.</p>
     <?php else: ?>
-        <div class="admin-table-wrap">
+        <div class="table-wrap admin-table-wrap">
             <table class="table table-hover align-middle">
                 <thead>
                     <tr>
@@ -336,7 +336,7 @@ $reservationHeading = $upcoming !== [] ? 'Najbliższe rezerwacje' : 'Ostatnie re
     <?php elseif ($recentLog === []): ?>
         <p class="admin-empty mt-3 mb-0">Brak zapisanych operacji.</p>
     <?php else: ?>
-        <div class="admin-table-wrap mt-3">
+        <div class="table-wrap admin-table-wrap mt-3">
             <table class="table table-hover align-middle mb-0">
                 <thead>
                     <tr>

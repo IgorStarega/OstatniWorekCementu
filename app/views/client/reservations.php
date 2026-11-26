@@ -21,7 +21,7 @@ $statusClasses = [
         <?php if ($future === []): ?>
             <p class="text-muted">Brak nadchodzących rezerwacji.</p>
         <?php else: ?>
-            <div class="admin-table-wrap">
+            <div class="table-wrap admin-table-wrap">
                 <table class="table table-sm align-middle mb-0">
                     <thead>
                         <tr>
@@ -66,7 +66,7 @@ $statusClasses = [
         <?php if ($history === []): ?>
             <p class="text-muted">Historia jest jeszcze pusta.</p>
         <?php else: ?>
-            <div class="admin-table-wrap">
+            <div class="table-wrap admin-table-wrap">
                 <table class="table table-sm align-middle mb-0">
                     <thead>
                         <tr>

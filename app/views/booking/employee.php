@@ -20,8 +20,9 @@
 
         <div class="d-grid gap-2 mb-4">
             <?php foreach ($employees as $employee): ?>
-                <label class="booking-choice">
+                <label class="booking-choice" for="booking-employee-<?= (int) $employee['id'] ?>">
                     <input class="form-check-input" type="radio" name="employee_id"
+                           id="booking-employee-<?= (int) $employee['id'] ?>"
                            value="<?= (int) $employee['id'] ?>" required
                         <?= (int) $booking['employee_id'] === (int) $employee['id'] ? 'checked' : '' ?>>
                     <span class="booking-choice-body">

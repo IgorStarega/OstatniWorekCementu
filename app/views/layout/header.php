@@ -84,6 +84,7 @@ $isAdminPage = strpos($currentPage, 'admin-') === 0;
         <?php if ($globalFlash !== null): ?>
             <?php $flashRole = $globalFlash['type'] === 'status' ? 'status' : 'alert'; ?>
             <p role="<?= htmlspecialchars($flashRole, ENT_QUOTES, 'UTF-8') ?>"
+               aria-live="<?= $flashRole === 'status' ? 'polite' : 'assertive' ?>"
                class="alert <?= $flashRole === 'status' ? 'alert-success' : 'alert-danger' ?> mb-4">
                 <?= htmlspecialchars($globalFlash['message'], ENT_QUOTES, 'UTF-8') ?>
             </p>

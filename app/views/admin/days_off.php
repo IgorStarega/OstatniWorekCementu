@@ -59,7 +59,7 @@ $today = date('Y-m-d');
             <?php if ($daysOff === []): ?>
                 <p class="admin-empty mb-0">Brak zapisanych dni wolnych.</p>
             <?php else: ?>
-                <div class="admin-table-wrap">
+                <div class="table-wrap admin-table-wrap">
                     <table class="table table-hover align-middle">
                         <thead>
                             <tr>

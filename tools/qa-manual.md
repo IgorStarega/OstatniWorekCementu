@@ -86,3 +86,84 @@ Adres: <http://localhost:8082/>
 - [ ] **CSS** — strona ładuje `/css/style.css` (brak 404 w zakładce Network).
 - [ ] **Sesja** — po wylogowaniu przycisk „Wstecz" nie pokazuje danych konta.
 - [ ] **Komunikaty** — sukces jest informacją (`role="status"`), błąd alertem (`role="alert"`).
+
+---
+
+# Checklista przed prezentacją (etap 5)
+
+Wykonuj po kolei na czystej bazie (`docker compose up -d`, świeży import).
+Każdy punkt ma jawny oczekiwany wynik; jeśli wynik się różni — nie pokazuj tego
+na prezentacji, tylko zgłoś i popraw.
+
+## A. Ścieżka klienta — `anna.kowalska@example.com` / `Haslo123!`
+
+- [ ] **1. Strona główna** — widać usługi z bazy, kategorie, liczniki (usługi,
+      kategorie, pracownicy); nigdzie nie ma tekstu „w kolejnym etapie”.
+- [ ] **2. Oferta i filtr kategorii** — `/?page=offer` pokazuje listę; klik kategorii
+      zawęża usługi, „Wszystkie” wraca do pełnej listy; pusta kategoria ma komunikat.
+- [ ] **3. Karta usługi** — `/?page=service&id=1` ma aktywny przycisk „Zarezerwuj”;
+      klik od razu przechodzi do wyboru pracownika z ustawioną usługą.
+- [ ] **4. Kalendarz** — krok daty ma dni z liczbą slotów; klik dnia z liczbą > 0
+      pokazuje godziny; dzień pełny/urlop jest nieaktywny.
+- [ ] **5. Potwierdzenie** — po zapisie w bazie `end_time = start_time + duration_minutes`,
+      a `final_price` = cena usługi z chwili rezerwacji.
+- [ ] **6. Moje rezerwacje → anulowanie** — status zmienia się na `anulowana`,
+      wiersz zostaje w bazie (brak `DELETE`), komunikat jest czytelny.
+- [ ] **7. Przełożenie** — nowa data i godzina zapisane; historia statusów
+      wcześniejszych zmian nie znika, pojawia się wpis o zmianie terminu.
+- [ ] **8. Cudze ID** — `?page=reservation&id=<id Tomasza>` i
+      `?page=reschedule&id=<id Tomasza>` dają **404**, nie 403 i nie dane obcego.
+
+## B. Pracownik — `jan.kowalski@example.com` / `Haslo123!`
+
+- [ ] **9. „Dziś”** — panel pokazuje co najmniej jedną wizytę na dzisiejszą datę
+      (id z seeda, np. rezerwacja #6).
+- [ ] **10. Zmiana statusu własnej wizyty** — oczekująca → potwierdzona,
+      potwierdzona → zrealizowana; komunikat sukcesu, badge się zmienia.
+- [ ] **11. Cudza wizyta** — podmiana `id` w POST na wizytę innego pracownika
+      daje **403** i nie zmienia statusu w bazie.
+
+## C. Administrator — `admin@ostatniworekcementu.pl` / `Haslo123!`
+
+- [ ] **12. Dashboard** — liczby kafelków są zgodne z `SELECT COUNT(*)` z bazy
+      (klienci, pracownicy, usługi, rezerwacje, na dziś).
+- [ ] **13. Rezerwacje** — filtry data/status/pracownik działają razem,
+      paginacja zachowuje filtry, CSV pobiera się z polskimi znakami i `;`.
+- [ ] **14. Usługi** — dezaktywacja usługi powoduje zniknięcie jej z oferty
+      i ze strony głównej po odświeżeniu; aktywacja przywraca.
+- [ ] **15. Dostępność + przerwy** — dodanie przerwy u Adama (np. 12:00–12:30)
+      usuwa nachodzące godziny w kroku „godzina”; usunięcie przerwy je przywraca.
+- [ ] **16. Log administratora** — po operacjach z punktów 12–15 są wpisy
+      z autorem, akcją i datą; brak wpisów nie wywala strony.
+
+## D. Responsywność — F12 → tryb urządzenia 375 px
+
+- [ ] **17. Wszystkie widoki** — oferta, cały booking (5 kroków), panel klienta,
+      panel pracownika (7 kolumn), `admin-reservations` (8 kolumn), kalendarz.
+- [ ] **18. Przewijanie** — body nie ma poziomego scrolla; tabele przewijają się
+      **w sobie** (`.table-wrap`), kalendarz zostaje siatką 7 kolumn.
+- [ ] **19. Dotyk i formularze** — przyciski i sloty mają min. 44 px, pola mają
+      100% szerokości, menu zwija się do przycisku hamburgera i nie wystaje.
+
+## E. Odporność
+
+- [ ] **20. SQL Injection** — wpisz `' OR 1=1 --` w e-mail logowania, pole komentarza
+      i filtr admina; brak błędu SQL, brak logowania bez hasła.
+- [ ] **21. XSS** — wpisz `<script>alert(1)</script>` w komentarz rezerwacji
+      i nazwę kategorii; tekst jest widoczny dosłownie, skrypt się nie wykonuje.
+- [ ] **22. CSRF** — `curl -X POST http://localhost:8082/?page=logout` bez tokenu
+      daje **403**; to samo dla profilu i anulowania rezerwacji.
+- [ ] **23. Bez JavaScriptu** — wyłącz JS w DevTools i przejdź rezerwację:
+      siatka radio w kroku godziny działa (fallback), zapis się udaje.
+
+## Znane ograniczenia (nie zgłaszaj jako błąd)
+
+- Brak wysyłki e-maili — linki weryfikacji i resetu są pokazywane na ekranie
+  (Cloudflare Tunnel nie przepuszcza SMTP, port 25 zablokowany).
+- Przerwy w grafiku ma w danych demo tylko Adam — usługa 480 min w oknie 480 min
+  nie ma miejsca na przerwę (świadome ograniczenie seeda).
+- Kalendarz miesiąca wykonuje ok. 5 zapytań na dzień (≈150 na render) — opisany
+  w README kompromis; przy tej skali nie wpływa na odczucie użytkownika.
+- Po zmianie roli przez admina użytkownik musi się wylogować i zalogować,
+  żeby nowa rola trafiła do sesji (sesja trzyma `user_id` i `role`).
+- Testy 500 (błędny `DB_PASS`) wymagają restartu kontenera — poza automatem.

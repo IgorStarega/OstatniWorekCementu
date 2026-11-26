@@ -45,7 +45,7 @@ $badgeClass = $statusClasses[$reservation['status']] ?? 'text-bg-secondary';
 <?php if ($history === []): ?>
     <p class="text-muted">Brak wpisów historii.</p>
 <?php else: ?>
-    <div class="admin-table-wrap mb-4">
+    <div class="table-wrap admin-table-wrap mb-4">
         <table class="table table-sm align-middle mb-0">
             <thead>
                 <tr>

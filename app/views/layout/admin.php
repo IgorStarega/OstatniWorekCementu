@@ -81,7 +81,8 @@ $adminModules = [
         <?php endif; ?>
 
         <?php if (!empty($flash['message'])): ?>
-            <p role="<?= htmlspecialchars($flash['type'], ENT_QUOTES, 'UTF-8') ?>" class="mb-3">
+            <p role="<?= htmlspecialchars($flash['type'], ENT_QUOTES, 'UTF-8') ?>"
+               aria-live="<?= $flash['type'] === 'status' ? 'polite' : 'assertive' ?>" class="mb-3">
                 <?= htmlspecialchars($flash['message'], ENT_QUOTES, 'UTF-8') ?>
             </p>
         <?php endif; ?>

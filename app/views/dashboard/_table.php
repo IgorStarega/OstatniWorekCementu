@@ -9,7 +9,7 @@ $statusClasses = [
 <?php if ($rows === []): ?>
     <p class="admin-empty mb-0"><?= htmlspecialchars($emptyMessage, ENT_QUOTES, 'UTF-8') ?></p>
 <?php else: ?>
-    <div class="admin-table-wrap">
+    <div class="table-wrap admin-table-wrap">
         <table class="table table-sm align-middle mb-0">
             <thead>
                 <tr>
