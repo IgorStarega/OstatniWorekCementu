@@ -73,6 +73,11 @@ class ClientController
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             http_response_code(405);
             header('Allow: POST');
+            $pageTitle = 'Metoda niedozwolona';
+            $allowMethod = 'POST';
+            require BASE_PATH . '/app/views/layout/header.php';
+            require BASE_PATH . '/app/views/errors/405.php';
+            require BASE_PATH . '/app/views/layout/footer.php';
             return;
         }
 

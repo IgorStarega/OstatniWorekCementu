@@ -60,6 +60,8 @@
             </tbody>
         </table>
     </div>
+<?php else: ?>
+    <p class="empty-state">Kalendarz jest chwilowo niedostępny. Wybierz datę ręcznie w formularzu poniżej.</p>
 <?php endif; ?>
 
 <form method="post" action="/?page=booking&amp;step=date" class="booking-form">

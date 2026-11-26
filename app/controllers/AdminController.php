@@ -62,6 +62,7 @@ class AdminController
                 $category = $id > 0 ? $categories->find($id) : null;
 
                 if ($category === null) {
+                    http_response_code(404);
                     $errors[] = 'Nie znaleziono kategorii do usunięcia.';
                 } else {
                     $servicesCount = $categories->countServices($id);
@@ -163,6 +164,7 @@ class AdminController
                 $service = $id > 0 ? $services->find($id) : null;
 
                 if ($service === null) {
+                    http_response_code(404);
                     $errors[] = 'Nie znaleziono usługi do usunięcia.';
                 } else {
                     $reservationsCount = $services->countReservations($id);
@@ -300,6 +302,7 @@ class AdminController
                 $employee = $id > 0 ? $employees->find($id) : null;
 
                 if ($employee === null) {
+                    http_response_code(404);
                     $errors[] = 'Nie znaleziono pracownika do usunięcia.';
                 } else {
                     $reservationsCount = $employees->countReservations($id);
@@ -503,6 +506,14 @@ class AdminController
             if ($selectedEmployeeId < 1 && $employees !== []) {
                 $selectedEmployeeId = (int) $employees[0]['id'];
             }
+        }
+
+        // Jawne ID pracownika z adresu musi istnieć. POST z błędem walidacji
+        // renderuje formularz (200), ale GET na nieistniejący profil to 404.
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            && $selectedEmployeeId > 0
+            && $employeesModel->find($selectedEmployeeId) === null) {
+            $this->notFound('Nie znaleziono pracownika o podanym numerze.');
         }
 
         $selectedEmployee = $selectedEmployeeId > 0 ? $employeesModel->find($selectedEmployeeId) : null;
@@ -713,6 +724,14 @@ class AdminController
             }
         }
 
+        // Jawne ID pracownika z adresu musi istnieć. POST z błędem walidacji
+        // renderuje formularz (200), ale GET na nieistniejący profil to 404.
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            && $selectedEmployeeId > 0
+            && $employeesModel->find($selectedEmployeeId) === null) {
+            $this->notFound('Nie znaleziono pracownika o podanym numerze.');
+        }
+
         $selectedEmployee = $selectedEmployeeId > 0 ? $employeesModel->find($selectedEmployeeId) : null;
         $availability = $selectedEmployee !== null
             ? $availabilityModel->forEmployee($selectedEmployeeId)
@@ -848,6 +867,14 @@ class AdminController
             if ($selectedEmployeeId < 1 && $employees !== []) {
                 $selectedEmployeeId = (int) $employees[0]['id'];
             }
+        }
+
+        // Jawne ID pracownika z adresu musi istnieć. POST z błędem walidacji
+        // renderuje formularz (200), ale GET na nieistniejący profil to 404.
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            && $selectedEmployeeId > 0
+            && $employeesModel->find($selectedEmployeeId) === null) {
+            $this->notFound('Nie znaleziono pracownika o podanym numerze.');
         }
 
         $selectedEmployee = $selectedEmployeeId > 0 ? $employeesModel->find($selectedEmployeeId) : null;
@@ -1048,9 +1075,10 @@ class AdminController
         if ($id > 0) {
             $reservation = $model->find($id);
 
+            // Brak zasobu to 404, a nie przekierowanie z komunikatem:
+            // adres wskazuje konkretną rezerwację, której nie ma.
             if ($reservation === null) {
-                $this->flash('alert', 'Nie znaleziono rezerwacji.');
-                $this->redirect('admin-reservations', $preservedFilters);
+                $this->notFound('Nie znaleziono rezerwacji o podanym numerze.');
             }
         }
 
@@ -1208,6 +1236,18 @@ class AdminController
             'type'    => $type === 'status' ? 'status' : 'alert',
             'message' => $message,
         ];
+    }
+
+    // Wspólny widok 404 panelu: zasób o podanym ID nie istnieje.
+    private function notFound(string $message = 'Nie znaleziono zasobu.'): void
+    {
+        http_response_code(404);
+        $pageTitle = 'Nie znaleziono';
+        $notFoundMessage = $message;
+        require BASE_PATH . '/app/views/layout/header.php';
+        require BASE_PATH . '/app/views/errors/404.php';
+        require BASE_PATH . '/app/views/layout/footer.php';
+        exit;
     }
 
     private function takeFlash(): ?array
