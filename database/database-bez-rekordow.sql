@@ -294,6 +294,7 @@ ALTER TABLE `reservations`
   ADD KEY `service_id` (`service_id`),
   ADD KEY `reservation_date` (`reservation_date`),
   ADD KEY `status` (`status`),
+  ADD KEY `idx_reservations_user_date` (`user_id`,`reservation_date`),
   ADD UNIQUE KEY `uq_employee_slot` (`employee_id`,`reservation_date`,`start_time`);
 
 --
@@ -319,7 +320,8 @@ ALTER TABLE `admin_log`
 --
 ALTER TABLE `services`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `category_id` (`category_id`);
+  ADD KEY `category_id` (`category_id`),
+  ADD KEY `idx_services_category_active` (`category_id`,`is_active`);
 
 --
 -- Indeksy dla tabeli `service_categories`

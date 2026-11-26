@@ -306,10 +306,15 @@ pozostają nieklikalnymi elementami. Strzałki `←`/`→` zmieniają miesiąc p
 nie z przeszłości i niepuste `slotsFor()`. Pod tabelą nadal jest `input type="date"`
 jako alternatywa dostępnościowa.
 
-**Ograniczenie wydajności:** jeden dzień to jedno wywołanie `slotsFor()`, czyli
-maksymalnie około 30–32 zapytań na wyświetlenie miesiąca dla jednego pracownika.
-To akceptowalne przy tej skali projektu; przy większym ruchu należałoby policzyć
-dostępność jednym zapytaniem zbiorczym.
+**Ograniczenie wydajności (świadomy kompromis):** `buildCalendar()` wywołuje
+`slotsFor()` raz na każdy dzień miesiąca, bo dopiero ono zna okno pracy, przerwy,
+dzień wolny i zajęte terminy. Jedno wywołanie to 5 zapytań przygotowanych
+(okno, dzień wolny, przerwy, usługa, rezerwacje dnia), więc pełny miesiąc to
+około **150–160 zapytań na jedno wyświetlenie kroku daty**. Dni wolne pobieramy
+raz na miesiąc (nie raz na dzień), a widok nie odpytuje bazy w pętli.
+Przy skali projektu (maks. 31 dni, jeden użytkownik, indeksy z migracji 009)
+jest to akceptowalne; optymalizacją na przyszłość byłoby jedno zapytanie
+zbiorcze o dostępność całego miesiąca.
 
 ---
 
@@ -446,7 +451,7 @@ Główna struktura repozytorium:
 > ├── config/             # konfiguracja aplikacji i serwera MySQL
 > │   └── mysql/
 > ├── database/           # schemat, dane testowe i scalony zrzut
-> │   └── migrations/     # migracje dla istniejących baz (002–008)
+> │   └── migrations/     # migracje dla istniejących baz (002–009)
 > ├── docker/             # obraz PHP, php.ini i konfiguracja Apache
 > │   └── php/
 > │       └── entrypoint.sh # automatyczne migracje przed startem Apache
@@ -714,6 +719,8 @@ migracje można też uruchomić ręcznie przez klienta `mysql`:
 
 `docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < database/migrations/008-przerwy.sql`
 
+`docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < database/migrations/009-indeksy.sql`
+
 Migracje są idempotentne: sprawdzają `information_schema` przed każdym `ALTER TABLE`
 (MySQL 8.0 nie ma `ADD COLUMN IF NOT EXISTS`), więc ponowne uruchomienie nic nie psuje.
 Migracja `002` dodaje `users.failed_attempts`, `users.locked_until` i tabelę `password_resets`;
@@ -723,7 +730,8 @@ dostępu po włączeniu weryfikacji e-mail. `004` naprawia podwójne kodowanie p
 w danych (`Ocieplanie budynkÃ³w` → `Ocieplanie budynków`); poprawione kolumny nie są ruszane
 przy kolejnym uruchomieniu. `005` dodaje historię zmian statusów rezerwacji (`status_history`),
 `006` — log operacji administratora (`admin_log`), `007` — dni wolne i urlopy pracowników
-(`employee_days_off`), a `008` — przerwy w godzinach pracy (`employee_breaks`).
+(`employee_days_off`), a `008` — przerwy w godzinach pracy (`employee_breaks`). `009` dodaje indeksy
+`idx_reservations_user_date` i `idx_services_category_active` pod panel klienta i ofertę.
 Po wszystkich migracjach baza ma **14 tabel aplikacji + schema_migrations (tabela techniczna)**.
 
 **(b) Dane są nieważne** — zaczynamy od zera:
@@ -884,7 +892,8 @@ Mechanizmy wdrożone w kodzie (szczegóły i miejsca w plikach: [`docs/OBRONA.md
 * **AJAX-owe terminy:** endpoint `?page=api-slots` zwraca JSON z walidacją identyczną
   jak formularz; siatka radio w kroku godziny pozostaje fallbackiem bez JavaScriptu.
 * **Kalendarz miesiąca:** krok daty pokazuje dni z liczbą wolnych slotów, z podziałem
-  na przeszłe, dni wolne, wolne i pełne; liczba zapytań jest ograniczona do ~32 na render.
+  na przeszłe, dni wolne, wolne i pełne; liczba zapytań to ok. 5 na dzień (≈150 na miesiąc),
+  opisana w README jako świadomy kompromis.
 * **Przerwy w godzinach pracy:** tabela `employee_breaks` i migracja 008; przerwy
   realnie odejmują sloty, a administrator zarządza nimi w module dostępności.
 * **Przełożenie wizyty:** klient może zmienić termin własnej przyszłej wizyty;

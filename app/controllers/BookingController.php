@@ -516,7 +516,12 @@ class BookingController
         $lastDay = (int) $first->format('t');
         $today = date('Y-m-d');
         $availability = new AvailabilityService($pdo);
-        $dayOff = new EmployeeDayOff($pdo);
+
+        // Dni wolne pobieramy RAZ na miesiąc, a nie zapytaniem na każdy dzień.
+        $daysOff = [];
+        foreach ((new EmployeeDayOff($pdo))->forEmployee($employeeId) as $row) {
+            $daysOff[(string) $row['date']] = true;
+        }
 
         // Puste komórki przed pierwszym dniem miesiąca: konwencja 1 = pon.
         $cells = array_fill(0, (int) $first->format('N') - 1, null);
@@ -527,7 +532,7 @@ class BookingController
 
             if ($date < $today) {
                 $status = 'past';
-            } elseif ($dayOff->isDayOff($employeeId, $date)) {
+            } elseif (isset($daysOff[$date])) {
                 $status = 'off';
             } else {
                 $slotCount = count($availability->slotsFor($employeeId, $serviceId, $date));
