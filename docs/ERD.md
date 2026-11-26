@@ -1,11 +1,13 @@
 # ERD — OstatniWorekCementu
 
 Aktualny diagram bazy danych (`budowlanka_rezerwacje`, MySQL 8.0, `utf8mb4_unicode_ci`).
-Obejmuje **13 tabel domenowych** i odpowiada plikowi `database/database-bez-rekordow.sql`.
-Tabela `schema_migrations` to tabela techniczna runnera migracji (`tools/migrate.php`) i nie jest częścią modelu domenowego.
+Obejmuje **14 tabel aplikacji** i odpowiada w całości plikowi `database/database-bez-rekordow.sql`
+(14 × `CREATE TABLE`). Tabela `schema_migrations` to piętnasta, techniczna tabela runnera
+migracji (`tools/migrate.php`) — nie jest częścią modelu domenowego i nie ma relacji.
 
 Diagram w formacie Mermaid renderuje się bezpośrednio na GitHubie. Wersją
 archiwalną z etapu 1 jest `ERD.jpg` (7 tabel) — nie jest już aktualna.
+Opis tabel, indeksów i decyzji projektowych: [`BAZA.md`](BAZA.md).
 
 ```mermaid
 erDiagram
@@ -37,6 +39,15 @@ erDiagram
         tinyint day_of_week
         time start_time
         time end_time
+    }
+
+    employee_breaks {
+        int id PK
+        int employee_id
+        tinyint day_of_week
+        time start_time
+        time end_time
+        varchar label
     }
 
     employee_days_off {
@@ -133,6 +144,7 @@ erDiagram
     service_categories ||--o{ services : "category_id (ON DELETE CASCADE)"
 
     employees ||--o{ employee_availability : "employee_id (ON DELETE CASCADE)"
+    employees ||--o{ employee_breaks : "employee_id (ON DELETE CASCADE)"
     employees ||--o{ employee_days_off : "employee_id (ON DELETE CASCADE)"
     employees ||--o{ employee_services : "employee_id (ON DELETE CASCADE)"
     employees ||--o{ reservations : "employee_id (ON DELETE RESTRICT)"
@@ -143,26 +155,60 @@ erDiagram
     reservations ||--o{ status_history : "reservation_id (ON DELETE CASCADE)"
 ```
 
+## Typy, ograniczenia i klucze
+
+* `int` — klucze główne (`AUTO_INCREMENT`) i klucze obce,
+* `tinyint(1)` — flagi `is_active`, `day_of_week` (1 = poniedziałek … 7 = niedziela),
+* `date` / `time` — `reservation_date`, `start_time`, `end_time`; godziny zawsze `HH:MM:SS`,
+* `decimal(10,2)` — `services.price` i zamrożona w rezerwacji `reservations.final_price`,
+* `enum` — `users.role` (`klient`, `pracownik`, `admin`) i `reservations.status`
+  (`oczekująca`, `potwierdzona`, `zrealizowana`, `anulowana`),
+* `CHECK chk_break_time` — `employee_breaks.start_time < end_time`,
+* klucze obce mają `ON DELETE CASCADE` (dane zależne), `RESTRICT` (nie usuwaj historii
+  rezerwacji) albo `SET NULL` (autor wpisu historii/logu może zniknąć).
+
 ## Klucze i indeksy
 
 | Tabela | Klucz / indeks | Kolumny | Uwagi |
 | --- | --- | --- | --- |
 | `users` | `PRIMARY` | `id` | AUTO_INCREMENT |
-| `users` | `email` | `email` | UNIQUE |
+| `users` | `email` | `email` | UNIQUE — login i blokada duplikatu konta |
 | `employees` | `PRIMARY` | `id` | AUTO_INCREMENT |
 | `employees` | `user_id` | `user_id` | UNIQUE, FK → `users.id` (CASCADE) |
-| `employee_availability` | `uq_employee_day` | `employee_id`, `day_of_week` | UNIQUE — jedno okno na dzień |
-| `employee_days_off` | `uq_employee_date` | `employee_id`, `date` | UNIQUE — jeden powód na dzień |
+| `employee_availability` | `PRIMARY` | `id` | AUTO_INCREMENT |
+| `employee_availability` | `employee_id` | `employee_id` | FK → `employees.id` (CASCADE) |
+| `employee_availability` | `uq_employee_day` | `employee_id`, `day_of_week` | UNIQUE — jedno okno pracy na dzień |
+| `employee_breaks` | `PRIMARY` | `id` | AUTO_INCREMENT |
+| `employee_breaks` | `idx_break_employee_day` | `employee_id`, `day_of_week` | FK + szybki odczyt przerw dnia |
+| `employee_days_off` | `uq_employee_date` | `employee_id`, `date` | UNIQUE — jeden wpis na dzień |
+| `employee_days_off` | `date` | `date` | filtr kalendarza/dnia |
 | `employee_services` | `PRIMARY` | `employee_id`, `service_id` | klucz złożony (N:M) |
+| `employee_services` | `service_id` | `service_id` | FK → `services.id` (CASCADE) |
 | `services` | `category_id` | `category_id` | FK → `service_categories.id` (CASCADE) |
-| `reservations` | `uq_employee_slot` | `employee_id`, `reservation_date`, `start_time` | UNIQUE — brak dwóch rezerwacji w tym samym slocie |
+| `services` | `idx_services_category_active` | `category_id`, `is_active` | migracja 009 — oferta i strona główna |
+| `reservations` | `PRIMARY` | `id` | AUTO_INCREMENT |
+| `reservations` | `user_id` | `user_id` | FK → `users.id` (RESTRICT) |
+| `reservations` | `employee_id` | `employee_id` | FK → `employees.id` (RESTRICT) |
+| `reservations` | `service_id` | `service_id` | FK → `services.id` (RESTRICT) |
+| `reservations` | `reservation_date` | `reservation_date` | filtry zakresu dat |
+| `reservations` | `status` | `status` | filtry admina i statystyki |
+| `reservations` | `uq_employee_slot` | `employee_id`, `reservation_date`, `start_time` | UNIQUE — brak dwóch rezerwacji w tym samym slocie; prefiks pokrywa panel pracownika |
+| `reservations` | `idx_reservations_user_date` | `user_id`, `reservation_date` | migracja 009 — panel klienta |
 | `status_history` | `reservation_id` | `reservation_id` | FK → `reservations.id` (CASCADE) |
 | `status_history` | `changed_by` | `changed_by` | FK → `users.id` (SET NULL) |
-| `admin_log` | `entity` | `entity`, `entity_id` | indeks złożony |
+| `status_history` | `changed_at` | `changed_at` | sortowanie historii |
+| `admin_log` | `entity` | `entity`, `entity_id` | indeks złożony (polimorficzne `entity_id`) |
 | `admin_log` | `user_id` | `user_id` | FK → `users.id` (SET NULL) |
-| `password_resets` | `token_hash` | `token_hash` | UNIQUE (przechowywany jest tylko hash SHA-256) |
+| `admin_log` | `created_at` | `created_at` | lista ostatnich operacji |
+| `password_resets` | `token_hash` | `token_hash` | UNIQUE (w bazie tylko SHA-256) |
+| `password_resets` | `email` | `email` | wyszukanie aktywnego resetu |
 | `email_verifications` | `token_hash` | `token_hash` | UNIQUE, FK → `users.id` (CASCADE) |
-| `email_sends` | `email_purpose_created` | `email`, `purpose`, `created_at` | indeks pomocniczy; w wymaganiach etapu 3 nazwany `uq_email_purpose_created` |
+| `email_sends` | `email_purpose_created` | `email`, `purpose`, `created_at` | indeks pomocniczy limitów wysyłek |
+
+**Klucz `admin_log.entity_id` nie jest kluczem obcym** — log jest polimorficzny
+(`entity` wskazuje tabelę: `reservation`, `service`, `employee`, `user`), więc nie da się
+nałożyć jednego FK. To świadoma decyzja; pozostałe kolumny `*_id` mają klucze obce.
+
 
 ## Relacje i zachowanie `ON DELETE`
 

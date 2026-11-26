@@ -2,6 +2,15 @@
 
 System internetowy do obsługi firmy budowlanej oraz rezerwacji usług budowlanych. Aplikacja umożliwia klientom zapoznanie się z ofertą firmy oraz składanie rezerwacji, a pracownikom i administratorom zarządzanie usługami oraz realizowanymi zleceniami.
 
+**Autorzy:** Igor Staręga, Maciej Radzikowski (projekt 5iT, przedmiot TSiAI).
+
+System prowadzi klienta przez pełną ścieżkę rezerwacji: prezentuje usługi z bazy,
+pozwala wybrać pracownika i wolną godzinę w kalendarzu, a następnie zapisuje wizytę
+i pokazuje ją w panelu klienta. Pracownik widzi swoje wizyty na dziś, przyszłe i historię,
+a administrator zarządza ofertą, pracownikami, dostępnością i rezerwacjami.
+Dostępność liczy serwer na podstawie tygodniowych okien pracy, dni wolnych i przerw,
+więc ten sam wolny termin widzi każdy klient i aplikacja nie dopuszcza nakładania wizyt.
+
 ## Spis treści
 
 * [Opis projektu](#opis-projektu)
@@ -84,15 +93,16 @@ Aplikacja pozwala uporządkować proces obsługi klienta – od przedstawienia o
 
 ## Technologie
 
-Projekt został przygotowany jako aplikacja internetowa.
+Projekt został przygotowany jako aplikacja internetowa w PHP bez frameworka i Composera.
+Wykorzystywane technologie i wersje:
 
-W projekcie wykorzystywane są technologie znajdujące się w katalogach aplikacji oraz konfiguracji projektu, między innymi:
-
-* PHP,
-* HTML5,
-* CSS,
-* JavaScript,
-* SQL / relacyjna baza danych.
+* **PHP 8.2** (Apache w kontenerze) — logika aplikacji i walidacja serwerowa,
+* **MySQL 8.0** — relacyjna baza danych (`utf8mb4_unicode_ci`),
+* **HTML5, CSS3, JavaScript** (ES5/ES6, bez frameworka JS) — warstwa prezentacji,
+* **Bootstrap 5.3** — lokalna kopia w `public/vendor/` (bez zewnętrznego CDN),
+* **Docker / Docker Compose** — powtarzalne środowisko lokalne i deploy,
+* **Git** — praca na branchach i historia zmian,
+* **phpMyAdmin** — podgląd bazy podczas demonstracji.
 
 Szczegółowa konfiguracja aplikacji znajduje się w katalogach:
 
@@ -106,7 +116,7 @@ Szczegółowa konfiguracja aplikacji znajduje się w katalogach:
 
 ## Baza danych
 
-System korzysta z relacyjnej bazy danych odpowiedzialnej za przechowywanie informacji związanych z użytkownikami, usługami oraz rezerwacjami. Schemat obejmuje **14 tabel domenowych + schema_migrations (tabela techniczna)**.
+System korzysta z relacyjnej bazy danych odpowiedzialnej za przechowywanie informacji związanych z użytkownikami, usługami oraz rezerwacjami. Schemat w `database/database-bez-rekordow.sql` obejmuje **14 tabel aplikacji**; piętnastą tabelą w działającej bazie jest techniczna `schema_migrations`, tworzona przez runner migracji. Krótki opis tabel i indeksów: [`docs/BAZA.md`](docs/BAZA.md).
 
 Baza danych umożliwia między innymi przechowywanie:
 
@@ -375,20 +385,9 @@ Administrator posiada rozszerzone uprawnienia pozwalające na zarządzanie syste
 
 ## Dane testowe (Logowanie)
 
-Aby ułatwić testowanie systemu, baza danych została zasilona przykładowymi użytkownikami. Hasło dla wszystkich kont testowych (zhashowane w bazie) to: **Haslo123!**
-
-**Konto Administratora:**
-* **Email:** `admin@ostatniworekcementu.pl` (Administrator Systemu)
-
-**Konta Pracowników:**
-* **Email:** `jan.kowalski@example.com` (Jan Kowalski)
-* **Email:** `piotr.nowak@example.com` (Piotr Nowak)
-* **Email:** `adam.wisniewski@example.com` (Adam Wiśniewski)
-* **Email:** `marek.wojcik@example.com` (Marek Wójcik)
-
-**Konta Klientów:**
-* **Email:** `anna.kowalska@example.com` (Anna Kowalska)
-* **Email:** `tomasz.zielinski@example.com` (Tomasz Zieliński)
+Hasło dla wszystkich kont testowych (zhashowane w bazie) to: **Haslo123!**
+Pełna tabela kont (admin, czterech pracowników, dwóch klientów) znajduje się
+w sekcji [Uruchomienie → Konta testowe](#konta-testowe).
 
 ---
 
@@ -461,7 +460,7 @@ Główna struktura repozytorium:
 > ├── tools/              # narzędzia CLI (migrate.php, migrate.sh, qa-smoke.sh)
 > │   ├── migrate.php     # runner migracji PDO (uruchamiany w entrypoint.sh)
 > │   ├── test-conflicts.php # 7 przypadków nakładania + excludeId (8/8 PASS)
-> │   └── check-slots.php # weryfikacja algorytmu dostępności z przerwami (8/8 PASS)
+> │   └── check-slots.php # weryfikacja algorytmu dostępności z przerwami (13/13 PASS)
 > ├── .env.example        # wzór konfiguracji lokalnej
 > ├── docker-compose.yml  # stos lokalny (app + db + phpMyAdmin)
 > ├── LICENSE
@@ -488,7 +487,10 @@ Zawiera `docker-compose.yml`, `.env.example` i `README.md` z instrukcją wdroże
 
 ### `docs/`
 Dokumentacja techniczna oraz materiały związane z projektem. `ERD.md` — aktualny diagram
-(Mermaid, renderuje się na GitHubie). `ERD.jpg` — wersja archiwalna z etapu 1.
+(Mermaid, renderuje się na GitHubie) i opis 14 tabel. `BAZA.md` — mapa tabel, kluczy
+i indeksów oraz uzasadnienie decyzji projektowych. `OBRONA.md` — mapa wymagań na kod,
+scenariusz prezentacji i pytania z odpowiedziami. `ERD.jpg` — wersja archiwalna z etapu 1.
+`tools/qa-manual.md` — checklista przeklikania przed prezentacją.
 
 ### `public/`
 Publicznie dostępna część aplikacji, z której korzysta użytkownik. `public/index.php`
@@ -512,45 +514,99 @@ Przed rozpoczęciem pracy należy upewnić się, że środowisko posiada:
 ## Uruchomienie
 
 Projekt uruchamiamy lokalnie przez Docker Compose (PHP 8.2 + Apache, MySQL 8.0, phpMyAdmin).
+Wymagane są: Docker z Compose, Git oraz wolne porty `8082` (aplikacja) i `8084` (phpMyAdmin).
 
-### 1. Klonowanie repozytorium
+### Uruchomienie od zera (kopiuj-wklej)
 
-Polecenie w terminalu:
-`git clone [https://github.com/IgorStarega/OstatniWorekCementu.git](https://github.com/IgorStarega/OstatniWorekCementu.git)`
-`cd OstatniWorekCementu`
+```bash
+git clone https://github.com/IgorStarega/OstatniWorekCementu.git
+cd OstatniWorekCementu
+cp .env.example .env
+docker compose up -d --build
+```
 
-### 2. Przygotowanie konfiguracji
+Czas startu: pierwszy build obrazu to zwykle 1–3 minuty, samo podniesienie stosu
+z gotowym obrazem około 30–60 sekund (MySQL musi zaimportować `database/database.sql`
+i przejść stan `healthy`). Gotowość sprawdzamy, aż strona odpowie kodem 200:
 
-Skopiuj wzór konfiguracji i w razie potrzeby dostosuj wartości:
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8082/?page=home
+```
 
-`cp .env.example .env`
+### Adresy
 
-Plik `.env` jest w `.gitignore` — nie commitujemy go. Zawiera dane dostępowe MySQL,
-phpMyAdmin oraz ustawienia portów (`BIND_ADDR`). Strefa czasowa jest stała
-(`Europe/Warsaw`) i wpisana bezpośrednio w `docker-compose.yml`.
+* Aplikacja: <http://localhost:8082/> (przekierowuje na `/?page=home`)
+* phpMyAdmin: <http://localhost:8084/> (logowanie jako `root`, hasło z `MYSQL_ROOT_PASSWORD`)
 
-### 3. Uruchomienie stosu
+### Import bazy od zera
 
-`docker compose up -d --build`
+Przy pierwszym starcie (pusty katalog `data/mysql`) kontener `owc-db` automatycznie
+importuje `database/database.sql` — struktura i dane testowe. Aby odtworzyć bazę ręcznie:
 
-### 4. Adresy
+```bash
+docker compose down
+# katalog danych MySQL należy do użytkownika kontenera, dlatego usuwamy go z kontenera:
+docker run --rm -v "$PWD/data:/data" mysql:8.0 sh -c 'rm -rf /data/mysql'
+docker compose up -d
+```
 
-* Aplikacja: `http://localhost:8082/` (przekierowuje na `/?page=home`)
-* phpMyAdmin: `http://localhost:8084/` (logowanie jako `root`, hasło z `MYSQL_ROOT_PASSWORD`)
+Można też zaimportować pliki ręcznie na działającym stosie:
 
-### 5. Dane testowe
+```bash
+docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < database/database.sql
+```
 
-Przy pierwszym starcie kontener `owc-db` importuje `database/database.sql`
-(struktura + dane testowe). Hasło wszystkich kont testowych to `Haslo123!`.
+### Migracje ręcznie
+
+Entrypoint `app` uruchamia migracje automatycznie przy każdym starcie. Ręcznie:
+
+```bash
+docker compose exec -T app php /var/www/html/tools/migrate.php --status
+docker compose exec -T app php /var/www/html/tools/migrate.php
+```
+
+Migracje są idempotentne i zapisują wykonane wersje w `schema_migrations`.
+Szczegóły w sekcji [Aktualizacja istniejącej bazy](#aktualizacja-istniejącej-bazy).
+
+### Testy po uruchomieniu
+
+```bash
+bash tools/qa-smoke.sh
+docker compose exec -T app php tools/check-slots.php
+docker compose exec -T app php tools/test-conflicts.php
+```
+
+### Konta testowe
+
+Hasło wszystkich kont testowych (zapisane w bazie jako hash) to **`Haslo123!`**.
+Konta są potwierdzone, więc logowanie działa od razu.
+
+| Rola | E-mail | Imię i nazwisko |
+|---|---|---|
+| admin | `admin@ostatniworekcementu.pl` | Administrator Systemu |
+| pracownik | `jan.kowalski@example.com` | Jan Kowalski |
+| pracownik | `piotr.nowak@example.com` | Piotr Nowak |
+| pracownik | `adam.wisniewski@example.com` | Adam Wiśniewski |
+| pracownik | `marek.wojcik@example.com` | Marek Wójcik |
+| klient | `anna.kowalska@example.com` | Anna Kowalska |
+| klient | `tomasz.zielinski@example.com` | Tomasz Zieliński |
+
+### Dane testowe
 
 Rezerwacje oraz dzień wolny mają daty liczone względem dnia importu
 (`CURDATE()` plus stały odstęp w dniach), więc zawsze istnieją rezerwacje
-„na dziś", „na jutro", przyszła, zrealizowana (wczoraj) i anulowana.
-Godziny dobrane są do okien pracowników tak, by przy imporcie w środę
-każda rezerwacja wypadała w dniu pracy wyznaczonego pracownika
-(a `end_time` = `start_time` + czas trwania usługi). Rezerwacja anulowana
-służy do testu, że status `anulowana` nie blokuje terminu, a urlop
-(+7 dni) — że dzień wolny blokuje wszystkie sloty danego dnia.
+„na dziś”, „na jutro”, przyszła, zrealizowana (wczoraj) i anulowana.
+Godziny dobrane są do okien pracowników tak, by każda rezerwacja wypadała
+w dniu pracy wyznaczonego pracownika (a `end_time` = `start_time` + czas trwania usługi).
+Rezerwacja anulowana służy do testu, że status `anulowana` nie blokuje terminu,
+a urlop (+7 dni) — że dzień wolny blokuje wszystkie sloty danego dnia.
+
+**Ograniczenia danych testowych.** Przerwy w grafiku ma tylko Adam (piętro niżej
+opisane usługi 480 min). Powód jest arytmetyczny: usługa 480 minut w oknie pracy
+480 minut (8:00–16:00) ma miejsce tylko wtedy, gdy w oknie nie ma przerwy — każda
+przerwa przesuwa koniec poza okno i odbiera wszystkie sloty. Dlatego przerwy
+demonstrujemy na krótszych usługach Adama, a nie na najdłuższej. To celowe
+ograniczenie zestawu demo, nie błąd algorytmu.
 
 ---
 
@@ -668,7 +724,7 @@ w danych (`Ocieplanie budynkÃ³w` → `Ocieplanie budynków`); poprawione kolum
 przy kolejnym uruchomieniu. `005` dodaje historię zmian statusów rezerwacji (`status_history`),
 `006` — log operacji administratora (`admin_log`), `007` — dni wolne i urlopy pracowników
 (`employee_days_off`), a `008` — przerwy w godzinach pracy (`employee_breaks`).
-Po wszystkich migracjach baza ma **14 tabel domenowych + schema_migrations (tabela techniczna)**.
+Po wszystkich migracjach baza ma **14 tabel aplikacji + schema_migrations (tabela techniczna)**.
 
 **(b) Dane są nieważne** — zaczynamy od zera:
 
@@ -746,7 +802,8 @@ Poza `.env.example` nie może nic wyjść.
 
 ## Konfiguracja
 
-Konfiguracja lokalna jest w pliku `.env` (wzorem jest `.env.example`). Ustawiamy tam m.in.:
+Konfiguracja lokalna jest w pliku `.env` (wzorem jest `.env.example`). Plik `.env` nie jest
+w repozytorium — jest wpisany do `.gitignore`; po sklonowaniu odtwarzamy go przez `cp .env.example .env`. Ustawiamy tam m.in.:
 
 * `APP_ENV` — `local` albo `prod` (w `prod` włączane jest `session.cookie_secure`, o ile żądanie
   przyszło po HTTPS — także za reverse proxy),
@@ -791,15 +848,32 @@ zgłasza jasny błąd.
 
 ## Bezpieczeństwo
 
-Podczas wdrażania aplikacji w środowisku produkcyjnym należy zadbać między innymi o:
+Mechanizmy wdrożone w kodzie (szczegóły i miejsca w plikach: [`docs/OBRONA.md`](docs/OBRONA.md)):
 
-* bezpieczne przechowywanie haseł użytkowników,
-* walidację danych przesyłanych przez formularze,
-* ochronę przed SQL Injection,
-* ochronę przed XSS,
-* odpowiednie zarządzanie sesjami,
-* kontrolę dostępu do poszczególnych funkcji systemu,
-* niewprowadzanie danych dostępowych do repozytorium.
+* **SQL Injection** — wszystkie zapytania z danymi użytkownika przechodzą przez PDO
+  prepared statements (`prepare()` + `execute([...])`); nie ma sklejania danych z SQL.
+  Stałe zapytania bez parametrów (np. liczniki statystyk) mogą używać `query()`.
+* **XSS** — każde wyjście z bazy lub formularza trafia do HTML przez
+  `htmlspecialchars(..., ENT_QUOTES, 'UTF-8')`; dotyczy to też atrybutów `href` i `value`.
+* **CSRF** — token losowany `random_bytes(32)` w sesji, porównywany `hash_equals()`;
+  każdy POST (logowanie, rejestracja, profil, rezerwacja, anulowanie, przełożenie,
+  panel administratora, wylogowanie) wymaga poprawnego tokenu i kończy się 403.
+* **IDOR** — klient czyta rezerwacje wyłącznie przez `findForUser()`/`forUser()`;
+  cudze i nieistniejące ID daje **404**, nie 403 (nie zdradzamy istnienia zasobu).
+  Profil bierze ID wyłącznie z sesji, a nie z `?id=`; admin ma `requireRole('admin')`.
+* **Hasła** — zapis `password_hash()` (bcrypt), weryfikacja `password_verify()`;
+  hasła nigdy nie trafiają do sesji ani do logów. Po zmianie hasła sesja jest odnawiana
+  (`session_regenerate_id(true)`).
+* **Sesja** — `session.use_strict_mode=1`, ciasteczko `httponly`, `samesite=Lax`,
+  a w `APP_ENV=prod` po HTTPS także `secure`. Samo ID i rola w sesji, bez danych osobowych.
+* **Tokeny jednorazowe** — reset hasła i weryfikacja e-mail trzymają w bazie tylko
+  SHA-256 tokenu, mają datę ważności (1 h / 24 h) i są usuwane po użyciu.
+* **Komunikaty błędów** — użytkownik widzi neutralny opis, a szczegóły wyjątków
+  (SQLSTATE, ścieżki, stack trace) trafiają wyłącznie do `error_log`.
+* **Sekrety** — plik `.env` nie jest w repozytorium (jest w `.gitignore`); konfigurację
+  odtwarzamy z `.env.example`. W historii Git nie ma kluczy ani haseł produkcyjnych.
+* **CSV** — eksport chroni komórki przed formula injection (prefiks `'` dla wartości
+  zaczynających się od `=`, `+`, `-`, `@`, także po białych znakach).
 
 ---
 
@@ -821,6 +895,26 @@ Podczas wdrażania aplikacji w środowisku produkcyjnym należy zadbać między 
 **Świadomie poza zakresem:** e-maile i przypomnienia o wizytach. Na deployu nie ma
 transportu SMTP — Cloudflare Tunnel nie przepuszcza SMTP, a port 25 jest zablokowany.
 Linki weryfikacji i resetu hasła są dlatego pokazywane na ekranie w trybie lokalnym.
+
+### Podsumowanie funkcji dodatkowych
+
+Zrealizowane rozszerzenia ponad minimum: AJAX-owe wolne terminy, kalendarz miesiąca,
+przerwy w grafiku, dni wolne/urlopy, historia statusów, log operacji administratora,
+eksport CSV, migracje z `schema_migrations`, reset hasła, weryfikacja e-mail,
+testy automatyczne (smoke, konflikty, sloty) i responsywny interfejs.
+
+### Świadome braki i uzasadnienie
+
+| Brak | Dlaczego |
+|---|---|
+| Wysyłka e-maili i przypomnień | Brak transportu SMTP na deployu (Cloudflare Tunnel nie przepuszcza SMTP, port 25 zablokowany). Linki są pokazywane na ekranie w trybie lokalnym. |
+| Powiadomienia SMS/push | Wymagałyby zewnętrznego dostawcy i sekretów; poza zakresem projektu szkolnego. |
+| Generowanie PDF | Nie jest wymagane przez PDF zadań; CSV pokrywa eksport danych. |
+| REST API | Aplikacja jest serwerowa (MVC + formularze); jedyny endpoint JSON (`api-slots`) obsługuje AJAX. |
+| Płatności online | Brak bramki płatniczej i umowy; rezerwacja jest zapisem wizyty, nie sprzedażą. |
+
+Zgodnie z PDF 15.4 niedokończone dodatki nie zastępują funkcji obowiązkowych,
+dlatego powyższe elementy są świadomie poza zakresem, a nie „w trakcie prac”.
 
 ### Etap 3 — panel administratora (wdrożone)
 

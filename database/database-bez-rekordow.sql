@@ -8,7 +8,7 @@
 -- Wersja PHP: 8.3.26
 
 -- Plik odtwarza bazę od zera: tworzy bazę `budowlanka_rezerwacje`
--- i całą strukturę (13 tabel, klucze, indeksy). Bez danych testowych.
+-- i całą strukturę (14 tabel, klucze, indeksy). Bez danych testowych.
 CREATE DATABASE IF NOT EXISTS `budowlanka_rezerwacje`
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `budowlanka_rezerwacje`;
