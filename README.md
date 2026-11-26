@@ -36,6 +36,7 @@ więc ten sam wolny termin widzi każdy klient i aplikacja nie dopuszcza nakład
 * [Konfiguracja](#konfiguracja)
 * [Bezpieczeństwo](#bezpieczeństwo)
 * [Funkcje dodatkowe](#funkcje-dodatkowe)
+* [Materiały do obrony](docs/OBRONA.md)
 * [Autorzy](#autorzy)
 * [Status projektu](#status-projektu)
 
@@ -493,9 +494,10 @@ Zawiera `docker-compose.yml`, `.env.example` i `README.md` z instrukcją wdroże
 ### `docs/`
 Dokumentacja techniczna oraz materiały związane z projektem. `ERD.md` — aktualny diagram
 (Mermaid, renderuje się na GitHubie) i opis 14 tabel. `BAZA.md` — mapa tabel, kluczy
-i indeksów oraz uzasadnienie decyzji projektowych. `OBRONA.md` — mapa wymagań na kod,
-scenariusz prezentacji i pytania z odpowiedziami. `ERD.jpg` — wersja archiwalna z etapu 1.
-`tools/qa-manual.md` — checklista przeklikania przed prezentacją.
+i indeksów oraz uzasadnienie decyzji projektowych. [`OBRONA.md`](docs/OBRONA.md) — mapa
+wymagań na kod, scenariusz prezentacji i pytania z odpowiedziami. `ERD.jpg` — wersja
+archiwalna z etapu 1. [`tools/qa-manual.md`](tools/qa-manual.md) — checklista
+przeklikania przed prezentacją.
 
 ### `public/`
 Publicznie dostępna część aplikacji, z której korzysta użytkownik. `public/index.php`
