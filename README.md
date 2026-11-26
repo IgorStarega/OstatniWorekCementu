@@ -743,8 +743,8 @@ Po wszystkich migracjach baza ma **14 tabel aplikacji + schema_migrations (tabel
 
 ## Testy
 
-Automatyczny smoke test to **89 asercji w kodzie** (`grep -c 'pass "' tools/qa-smoke.sh`),
-a w pełnym przebiegu **120/120 PASS** — część asercji powtarzają pętle (role i strony
+Automatyczny smoke test to **115 asercji w kodzie** (`grep -c 'pass "' tools/qa-smoke.sh`),
+a w pełnym przebiegu **146/146 PASS** — część asercji powtarzają pętle (role i strony
 panelu). Zakres: sesja, CSRF, rejestracja z linkiem, weryfikacja, XSS, IDOR (GET i POST),
 trzy role, blokada konta, dostęp do panelu administratora, operacje destrukcyjne,
 paginacja i wyszukiwanie użytkowników, favicon, ochrona własnego konta, schemat bazy,
@@ -752,8 +752,11 @@ migracje, kodowanie polskich znaków, retencja, historia statusów, log operacji
 wolne, przerwy, statystyki, eksport CSV, proces rezerwacji (kolejność kroków, data
 z przeszłości, godzina poza slotami, pracownik nieprzypisany do usługi), stronę główną,
 AJAX `api-slots` (sukces, 403, 422), kalendarz miesiąca, przełożenie wizyty i jego IDOR,
-panel klienta i pracownika oraz znikanie nieaktywnej usługi z oferty. Uruchamiamy
-przeciw działającemu stosowi:
+panel klienta i pracownika oraz znikanie nieaktywnej usługi z oferty. Numeracja kończy
+się na teście 96 — etap 5 dodał 71–96: CSRF na pięciu trasach, IDOR przez POST, walidację
+rejestracji i formularzy admina, błędne daty i nieaktywne usługi, kolizję przy przełożeniu,
+brak wycieku SQL/ścieżek, liczbę tabel, klucze główne i obce oraz nagłówki bezpieczeństwa.
+Uruchamiamy przeciw działającemu stosowi:
 
 ```bash
 bash tools/qa-smoke.sh
@@ -774,7 +777,7 @@ Wynik to `X/Y PASS`; kod wyjścia `1`, gdy cokolwiek padło. Rzeczy wymagające 
 bash tools/qa-smoke.sh
 ```
 
-Wynik: `120/120 PASS`, 0 FAIL, 2 SKIP (89 asercji w kodzie skryptu, resztę dają pętle).
+Wynik: `146/146 PASS`, 0 FAIL, 2 SKIP (115 asercji w kodzie skryptu, resztę dają pętle).
 SKIP-y wymagają przeglądarki lub restartu kontenera — opisane poniżej.
 
 ### Manualnie — czego automat nie sprawdzi

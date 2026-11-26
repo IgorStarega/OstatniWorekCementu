@@ -1324,6 +1324,408 @@ else
         "$(printf '%s' "$RESULT" | tr '\n' ' ')"
 fi
 
+# --- 71-94. Etap 5: przypadki brzegowe, CSRF, IDOR, walidacja -------------
+# Każdy test jest idempotentny i sprząta po sobie (tymczasowe wpisy mają
+# komentarz 'QA smoke' i są usuwane w cleanup()).
+
+# 71. POST bez CSRF na pięciu najważniejszych trasach = 403, bez zmian w bazie.
+RES_BEFORE_CSRF=$(dbq "SELECT COUNT(*) FROM reservations")
+CSRF_FAIL=0
+ANNAS_FUT_ID=$(dbq "SELECT id FROM reservations
+    WHERE user_id = $ANNA_ID AND reservation_date > CURDATE()
+      AND status IN ('oczekująca','potwierdzona')
+    ORDER BY id LIMIT 1")
+for entry in \
+    "profile|$JAR_ANNA" \
+    "booking&step=service|$JAR_ANNA" \
+    "reservation|$JAR_ANNA" \
+    "reschedule&id=$ANNAS_FUT_ID|$JAR_ANNA" \
+    "admin-services|$JAR_ADMIN"; do
+    target=${entry%%|*}
+    jar=${entry##*|}
+    code=$(req POST "$BASE_URL/?page=$target" -b "$jar" -c "$jar" \
+        --data-urlencode "id=$ANNAS_FUT_ID" \
+        --data-urlencode "action=cancel" \
+        --data-urlencode "service_id=1" \
+        --data-urlencode "date=$(date -d 'tomorrow' +%F)" \
+        --data-urlencode "start_time=08:00")
+    [ "$code" = "403" ] || CSRF_FAIL=$((CSRF_FAIL + 1))
+done
+RES_AFTER_CSRF=$(dbq "SELECT COUNT(*) FROM reservations")
+if [ "$CSRF_FAIL" = "0" ] && [ "$RES_BEFORE_CSRF" = "$RES_AFTER_CSRF" ]; then
+    pass "71. POST bez CSRF na 5 trasach = 403 i baza bez zmian"
+else
+    fail "71. POST bez CSRF na 5 trasach = 403 i baza bez zmian" \
+        "odrzucone=${CSRF_FAIL}/5, rezerwacje $RES_BEFORE_CSRF -> $RES_AFTER_CSRF"
+fi
+
+# 72. Wszystkie trasy admin-* jako klient = 403.
+ADMIN_LEAK=0
+for admin_page in admin-dashboard admin-categories admin-services admin-employees \
+                  admin-employee-services admin-availability admin-days-off \
+                  admin-users admin-reservations admin-log; do
+    code=$(req GET "$BASE_URL/?page=$admin_page" -b "$JAR_ANNA" -c "$JAR_ANNA")
+    [ "$code" = "403" ] || ADMIN_LEAK=$((ADMIN_LEAK + 1))
+done
+if [ "$ADMIN_LEAK" = "0" ]; then
+    pass "72. każda trasa admin-* jako klient = 403"
+else
+    fail "72. każda trasa admin-* jako klient = 403" "przepuszczone: $ADMIN_LEAK"
+fi
+
+# 73. Klient na dashboardzie pracownika = 403.
+code=$(req GET "$BASE_URL/?page=dashboard" -b "$JAR_ANNA" -c "$JAR_ANNA")
+if [ "$code" = "403" ]; then
+    pass "73. klient na dashboardzie = 403"
+else
+    fail "73. klient na dashboardzie = 403" "otrzymano $code"
+fi
+
+# 74. Gość na my-reservations = 302 na login.
+code=$(req GET "$BASE_URL/?page=my-reservations")
+if [ "$code" = "302" ] && grep -qi 'location:.*page=login' "$TMP/hdr"; then
+    pass "74. gość na my-reservations = 302 na login"
+else
+    fail "74. gość na my-reservations = 302 na login" "kod=$code"
+fi
+
+# 75-77. Nieistniejące ID usługi, rezerwacji i przełożenia = 404.
+code=$(req GET "$BASE_URL/?page=service&id=99999")
+if [ "$code" = "404" ]; then
+    pass "75. nieistniejąca usługa = 404"
+else
+    fail "75. nieistniejąca usługa = 404" "otrzymano $code"
+fi
+
+code=$(req GET "$BASE_URL/?page=reservation&id=99999" -b "$JAR_ANNA" -c "$JAR_ANNA")
+if [ "$code" = "404" ]; then
+    pass "76. nieistniejąca rezerwacja klienta = 404"
+else
+    fail "76. nieistniejąca rezerwacja klienta = 404" "otrzymano $code"
+fi
+
+code=$(req GET "$BASE_URL/?page=reschedule&id=99999" -b "$JAR_ANNA" -c "$JAR_ANNA")
+if [ "$code" = "404" ]; then
+    pass "77. nieistniejące przełożenie = 404"
+else
+    fail "77. nieistniejące przełożenie = 404" "otrzymano $code"
+fi
+
+# 78. IDOR: POST przełożenia cudzej wizyty = 404 i termin bez zmian.
+TOMASZ_RES2=$(dbq "SELECT id FROM reservations
+    WHERE user_id = (SELECT id FROM users WHERE email = 'tomasz.zielinski@example.com')
+    ORDER BY id LIMIT 1")
+if [ -n "$TOMASZ_RES2" ] && [ -n "$ANNAS_FUT_ID" ]; then
+    BEFORE_TERM=$(dbq "SELECT CONCAT(reservation_date, ' ', start_time) FROM reservations WHERE id = $TOMASZ_RES2")
+    code=$(req POST "$BASE_URL/?page=reschedule&id=$TOMASZ_RES2" -b "$JAR_ANNA" -c "$JAR_ANNA" \
+        --data-urlencode "id=$TOMASZ_RES2" \
+        --data-urlencode "date=$(date -d 'tomorrow' +%F)" \
+        --data-urlencode "start_time=08:00")
+    AFTER_TERM=$(dbq "SELECT CONCAT(reservation_date, ' ', start_time) FROM reservations WHERE id = $TOMASZ_RES2")
+    if [ "$code" = "404" ] && [ "$BEFORE_TERM" = "$AFTER_TERM" ]; then
+        pass "78. IDOR: POST przełożenia cudzej wizyty = 404, termin bez zmian"
+    else
+        fail "78. IDOR: POST przełożenia cudzej wizyty = 404, termin bez zmian" \
+            "kod=$code termin='$BEFORE_TERM' -> '$AFTER_TERM'"
+    fi
+else
+    fail "78. IDOR: POST przełożenia cudzej wizyty = 404, termin bez zmian" "brak danych"
+fi
+
+# 79. Rejestracja z duplikatem e-maila = 200 + błąd, liczba kont bez zmian.
+USERS_BEFORE=$(dbq "SELECT COUNT(*) FROM users")
+CSRF=$(get_csrf "$BASE_URL/?page=register" "$JAR_GUEST")
+code=$(req POST "$BASE_URL/?page=register" -b "$JAR_GUEST" -c "$JAR_GUEST" \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "first_name=Duplikat" --data-urlencode "last_name=Testowy" \
+    --data-urlencode "email=anna.kowalska@example.com" --data-urlencode "phone=500700800" \
+    --data-urlencode "password=Haslo123!" --data-urlencode "password_confirmation=Haslo123!")
+USERS_AFTER=$(dbq "SELECT COUNT(*) FROM users")
+if [ "$code" = "200" ] && grep -q 'już istnieje' "$TMP/body" \
+   && [ "$USERS_BEFORE" = "$USERS_AFTER" ]; then
+    pass "79. duplikat e-maila = 200 z błędem, liczba kont bez zmian"
+else
+    fail "79. duplikat e-maila = 200 z błędem, liczba kont bez zmian" \
+        "kod=$code konta $USERS_BEFORE -> $USERS_AFTER"
+fi
+
+# 80. Rejestracja z niepoprawnym e-mailem = 200 + błąd, bez nowego konta.
+USERS_BEFORE=$(dbq "SELECT COUNT(*) FROM users")
+CSRF=$(get_csrf "$BASE_URL/?page=register" "$JAR_GUEST")
+code=$(req POST "$BASE_URL/?page=register" -b "$JAR_GUEST" -c "$JAR_GUEST" \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "first_name=Zly" --data-urlencode "last_name=Email" \
+    --data-urlencode "email=niepoprawny-email" --data-urlencode "phone=500700801" \
+    --data-urlencode "password=Haslo123!" --data-urlencode "password_confirmation=Haslo123!")
+USERS_AFTER=$(dbq "SELECT COUNT(*) FROM users")
+if [ "$code" = "200" ] && grep -q 'poprawny adres e-mail' "$TMP/body" \
+   && [ "$USERS_BEFORE" = "$USERS_AFTER" ]; then
+    pass "80. rejestracja z błędnym e-mailem = 200 + błąd, bez konta"
+else
+    fail "80. rejestracja z błędnym e-mailem = 200 + błąd, bez konta" \
+        "kod=$code konta $USERS_BEFORE -> $USERS_AFTER"
+fi
+
+# 81. Rejestracja ze zbyt krótkim hasłem = 200 + błąd.
+USERS_BEFORE=$(dbq "SELECT COUNT(*) FROM users")
+CSRF=$(get_csrf "$BASE_URL/?page=register" "$JAR_GUEST")
+code=$(req POST "$BASE_URL/?page=register" -b "$JAR_GUEST" -c "$JAR_GUEST" \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "first_name=Krotkie" --data-urlencode "last_name=Haslo" \
+    --data-urlencode "email=qa.krotkie.${STAMP}@example.com" --data-urlencode "phone=500700802" \
+    --data-urlencode "password=abc" --data-urlencode "password_confirmation=abc")
+USERS_AFTER=$(dbq "SELECT COUNT(*) FROM users")
+if [ "$code" = "200" ] && grep -q 'co najmniej 8 znaków' "$TMP/body" \
+   && [ "$USERS_BEFORE" = "$USERS_AFTER" ]; then
+    pass "81. rejestracja z krótkim hasłem = 200 + błąd"
+else
+    fail "81. rejestracja z krótkim hasłem = 200 + błąd" \
+        "kod=$code konta $USERS_BEFORE -> $USERS_AFTER"
+fi
+
+# 82. Rejestracja z niezgodnymi hasłami = 200 + błąd.
+USERS_BEFORE=$(dbq "SELECT COUNT(*) FROM users")
+CSRF=$(get_csrf "$BASE_URL/?page=register" "$JAR_GUEST")
+code=$(req POST "$BASE_URL/?page=register" -b "$JAR_GUEST" -c "$JAR_GUEST" \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "first_name=Inne" --data-urlencode "last_name=Hasla" \
+    --data-urlencode "email=qa.inne.${STAMP}@example.com" --data-urlencode "phone=500700803" \
+    --data-urlencode "password=Haslo123!" --data-urlencode "password_confirmation=Haslo321!")
+USERS_AFTER=$(dbq "SELECT COUNT(*) FROM users")
+if [ "$code" = "200" ] && grep -q 'Hasła nie są takie same' "$TMP/body" \
+   && [ "$USERS_BEFORE" = "$USERS_AFTER" ]; then
+    pass "82. rejestracja z niezgodnymi hasłami = 200 + błąd"
+else
+    fail "82. rejestracja z niezgodnymi hasłami = 200 + błąd" \
+        "kod=$code konta $USERS_BEFORE -> $USERS_AFTER"
+fi
+
+# 83. Logowanie z błędnym hasłem = 200 + komunikat, sesja nieustawiona.
+JAR_BADLOGIN="$TMP/badlogin.txt"
+CSRF=$(get_csrf "$BASE_URL/?page=login" "$JAR_BADLOGIN")
+code=$(req POST "$BASE_URL/?page=login" -b "$JAR_BADLOGIN" -c "$JAR_BADLOGIN" \
+    --data-urlencode "csrf_token=$CSRF" \
+    --data-urlencode "email=anna.kowalska@example.com" --data-urlencode "password=ZleHaslo!")
+LOGIN_MSG=$(grep -c 'Nieprawidłowy e-mail lub hasło' "$TMP/body")
+code2=$(req GET "$BASE_URL/?page=profile" -b "$JAR_BADLOGIN" -c "$JAR_BADLOGIN")
+if [ "$code" = "200" ] && [ "$LOGIN_MSG" -gt 0 ] && [ "$code2" = "302" ]; then
+    pass "83. błędne hasło = 200 z komunikatem i bez sesji"
+else
+    fail "83. błędne hasło = 200 z komunikatem i bez sesji" "login=$code profil=$code2"
+fi
+
+# 84-86. Walidacja formularza usługi: cena ujemna, duration 0, puste pole.
+CSRF_ADMIN=$(get_csrf "$BASE_URL/?page=admin-services" "$JAR_ADMIN")
+QA_SERVICE_NAME="QA walidacja ${STAMP}"
+code=$(req POST "$BASE_URL/?page=admin-services" -b "$JAR_ADMIN" -c "$JAR_ADMIN" \
+    --data-urlencode "csrf_token=$CSRF_ADMIN" --data-urlencode "action=create" \
+    --data-urlencode "name=$QA_SERVICE_NAME" --data-urlencode "category_id=1" \
+    --data-urlencode "duration_minutes=60" --data-urlencode "price=-10")
+QA_ROW=$(dbq "SELECT COUNT(*) FROM services WHERE name = '$QA_SERVICE_NAME'")
+if [ "$code" = "200" ] && grep -q 'Cena musi być' "$TMP/body" && [ "$QA_ROW" = "0" ]; then
+    pass "84. usługa z ceną ujemną = 200 + błąd, bez wiersza"
+else
+    fail "84. usługa z ceną ujemną = 200 + błąd, bez wiersza" "kod=$code wiersze=$QA_ROW"
+fi
+
+code=$(req POST "$BASE_URL/?page=admin-services" -b "$JAR_ADMIN" -c "$JAR_ADMIN" \
+    --data-urlencode "csrf_token=$CSRF_ADMIN" --data-urlencode "action=create" \
+    --data-urlencode "name=$QA_SERVICE_NAME" --data-urlencode "category_id=1" \
+    --data-urlencode "duration_minutes=0" --data-urlencode "price=100")
+QA_ROW=$(dbq "SELECT COUNT(*) FROM services WHERE name = '$QA_SERVICE_NAME'")
+if [ "$code" = "200" ] && grep -q 'Czas trwania' "$TMP/body" && [ "$QA_ROW" = "0" ]; then
+    pass "85. usługa z duration 0 = 200 + błąd, bez wiersza"
+else
+    fail "85. usługa z duration 0 = 200 + błąd, bez wiersza" "kod=$code wiersze=$QA_ROW"
+fi
+
+code=$(req POST "$BASE_URL/?page=admin-services" -b "$JAR_ADMIN" -c "$JAR_ADMIN" \
+    --data-urlencode "csrf_token=$CSRF_ADMIN" --data-urlencode "action=create" \
+    --data-urlencode "name=" --data-urlencode "category_id=1" \
+    --data-urlencode "duration_minutes=60" --data-urlencode "price=100")
+if [ "$code" = "200" ] && grep -q 'Nazwa usługi jest wymagana' "$TMP/body"; then
+    pass "86. usługa bez nazwy = 200 + błąd"
+else
+    fail "86. usługa bez nazwy = 200 + błąd" "kod=$code"
+fi
+
+# 87. Rezerwacja z niepoprawną datą 2026-13-45 = odrzucona, bez wiersza.
+req GET "$BASE_URL/?page=booking&step=service&service_id=1" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null
+CSRF=$(get_csrf "$BASE_URL/?page=booking&step=employee" "$JAR_ANNA")
+req POST "$BASE_URL/?page=booking&step=employee" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null \
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "employee_id=1"
+CSRF=$(get_csrf "$BASE_URL/?page=booking&step=date" "$JAR_ANNA")
+RES_BEFORE=$(dbq "SELECT COUNT(*) FROM reservations")
+code=$(req POST "$BASE_URL/?page=booking&step=date" -b "$JAR_ANNA" -c "$JAR_ANNA" \
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "date=2026-13-45")
+RES_AFTER=$(dbq "SELECT COUNT(*) FROM reservations")
+if [ "$code" = "200" ] && grep -q 'Podaj poprawną datę' "$TMP/body" \
+   && [ "$RES_BEFORE" = "$RES_AFTER" ]; then
+    pass "87. rezerwacja z datą 2026-13-45 odrzucona, bez wiersza"
+else
+    fail "87. rezerwacja z datą 2026-13-45 odrzucona, bez wiersza" \
+        "kod=$code rezerwacje $RES_BEFORE -> $RES_AFTER"
+fi
+
+# 88. Rezerwacja nieaktywnej usługi = odrzucona.
+dbq "UPDATE services SET is_active = 0 WHERE id = 12" >/dev/null 2>&1
+CSRF=$(get_csrf "$BASE_URL/?page=booking&step=service" "$JAR_ANNA")
+code=$(req POST "$BASE_URL/?page=booking&step=service" -b "$JAR_ANNA" -c "$JAR_ANNA" \
+    --data-urlencode "csrf_token=$CSRF" --data-urlencode "service_id=12")
+dbq "UPDATE services SET is_active = 1 WHERE id = 12" >/dev/null 2>&1
+if [ "$code" = "200" ] && grep -q 'Usługa jest niedostępna' "$TMP/body"; then
+    pass "88. rezerwacja nieaktywnej usługi odrzucona"
+else
+    fail "88. rezerwacja nieaktywnej usługi odrzucona" "kod=$code"
+fi
+
+# 89. Przełożenie na termin zajęty przez inną rezerwację = odrzucone.
+RES_ROW2=$(dbq "SELECT id, employee_id, service_id, reservation_date, start_time
+    FROM reservations
+    WHERE user_id = $ANNA_ID AND reservation_date > CURDATE()
+      AND status IN ('oczekująca','potwierdzona')
+    ORDER BY id LIMIT 1")
+RES_ID2=$(printf '%s' "$RES_ROW2" | cut -f1)
+RES_EMP2=$(printf '%s' "$RES_ROW2" | cut -f2)
+RES_SRV2=$(printf '%s' "$RES_ROW2" | cut -f3)
+RES_DATE2=$(printf '%s' "$RES_ROW2" | cut -f4)
+RES_START2=$(printf '%s' "$RES_ROW2" | cut -f5)
+TMP_SLOT=""
+TARGET_DATE=""
+if [ -n "$RES_ID2" ]; then
+    # Termin docelowy musi mieć wolny slot dla pary pracownik+usługa, ale nie
+    # może być to obecna data rezerwacji (tam może nie być już miejsca).
+    for offset in $(seq 1 14); do
+        candidate=$(date -d "+$offset day" +%F)
+        [ "$candidate" = "$RES_DATE2" ] && continue
+        req GET "$BASE_URL/?page=api-slots&employee_id=$RES_EMP2&service_id=$RES_SRV2&date=$candidate" \
+            -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null
+        candidate_slot=$(grep -oP '"slots":\["\K[0-9]{2}:[0-9]{2}' "$TMP/body" | head -1)
+        if [ -n "$candidate_slot" ]; then
+            TARGET_DATE="$candidate"
+            TMP_SLOT="$candidate_slot"
+            break
+        fi
+    done
+fi
+if [ -n "$TMP_SLOT" ]; then
+    dbq "INSERT INTO reservations
+         (user_id, employee_id, service_id, final_price, reservation_date,
+          start_time, end_time, status, comment)
+         SELECT $ANNA_ID, $RES_EMP2, $RES_SRV2, 0.00, '$TARGET_DATE',
+                '$TMP_SLOT:00', ADDTIME('$TMP_SLOT:00', SEC_TO_TIME(duration_minutes * 60)),
+                'potwierdzona', 'QA smoke'
+         FROM services WHERE id = $RES_SRV2" >/dev/null 2>&1
+    BEFORE_TERM=$(dbq "SELECT CONCAT(reservation_date, ' ', start_time) FROM reservations WHERE id = $RES_ID2")
+    CSRF=$(get_csrf "$BASE_URL/?page=reschedule&id=$RES_ID2&date=$TARGET_DATE" "$JAR_ANNA")
+    code=$(req POST "$BASE_URL/?page=reschedule&id=$RES_ID2" -b "$JAR_ANNA" -c "$JAR_ANNA" \
+        --data-urlencode "csrf_token=$CSRF" --data-urlencode "id=$RES_ID2" \
+        --data-urlencode "date=$TARGET_DATE" --data-urlencode "start_time=$TMP_SLOT")
+    AFTER_TERM=$(dbq "SELECT CONCAT(reservation_date, ' ', start_time) FROM reservations WHERE id = $RES_ID2")
+    dbq "DELETE FROM reservations WHERE comment = 'QA smoke'" >/dev/null 2>&1
+    if { [ "$code" = "422" ] || [ "$code" = "200" ] || [ "$code" = "302" ]; } \
+       && [ "$BEFORE_TERM" = "$AFTER_TERM" ]; then
+        pass "89. przełożenie na zajęty termin odrzucone, data bez zmian"
+    else
+        fail "89. przełożenie na zajęty termin odrzucone, data bez zmian" \
+            "kod=$code termin '$BEFORE_TERM' -> '$AFTER_TERM'"
+    fi
+else
+    fail "89. przełożenie na zajęty termin odrzucone, data bez zmian" "brak wolnego slotu do testu"
+fi
+
+# 90. Przełożenie wizyty anulowanej = odrzucone (302 na szczegóły).
+CANCELLED_ID=$(dbq "SELECT id FROM reservations
+    WHERE user_id = $ANNA_ID AND status = 'anulowana' ORDER BY id LIMIT 1")
+if [ -n "$CANCELLED_ID" ]; then
+    code=$(req GET "$BASE_URL/?page=reschedule&id=$CANCELLED_ID" -b "$JAR_ANNA" -c "$JAR_ANNA")
+    if [ "$code" = "302" ] && grep -qi 'location:.*page=reservation' "$TMP/hdr"; then
+        pass "90. przełożenie wizyty anulowanej odrzucone"
+    else
+        fail "90. przełożenie wizyty anulowanej odrzucone" "kod=$code"
+    fi
+else
+    fail "90. przełożenie wizyty anulowanej odrzucone" "brak anulowanej rezerwacji Anny"
+fi
+
+# 91. Odpowiedzi 4xx/5xx nie zdradzają SQL, ścieżek ani stack trace.
+LEAK=0
+for leak_url in \
+    "?page=service&id=99999" \
+    "?page=reservation&id=99999" \
+    "?page=api-slots&employee_id=1&service_id=1&date=2026-13-45" \
+    "?page=admin-services"; do
+    if [ "$leak_url" = "?page=admin-services" ]; then
+        req GET "$BASE_URL/$leak_url" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null
+    else
+        req GET "$BASE_URL/$leak_url" -b "$JAR_ANNA" -c "$JAR_ANNA" >/dev/null
+    fi
+    if grep -qE 'SQLSTATE|PDOException|/var/www|Stack trace|Fatal error' "$TMP/body"; then
+        LEAK=$((LEAK + 1))
+    fi
+done
+if [ "$LEAK" = "0" ]; then
+    pass "91. odpowiedzi 4xx nie zawierają SQL, ścieżek ani stack trace"
+else
+    fail "91. odpowiedzi 4xx nie zawierają SQL, ścieżek ani stack trace" "wycieki: $LEAK"
+fi
+
+# 92. .env nie jest śledzony przez Git.
+if git ls-files | grep -qx '.env'; then
+    fail "92. .env nie jest w repozytorium" "plik .env jest śledzony"
+else
+    pass "92. .env nie jest w repozytorium"
+fi
+
+# 93. Liczba tabel aplikacji = 14 (bez technicznej schema_migrations).
+APP_TABLES=$(dbq "SELECT COUNT(*) FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME <> 'schema_migrations'")
+DDL_TABLES=$(grep -c 'CREATE TABLE' database/database-bez-rekordow.sql)
+if [ "$APP_TABLES" = "14" ] && [ "$DDL_TABLES" = "14" ]; then
+    pass "93. baza i DDL mają 14 tabel aplikacji"
+else
+    fail "93. baza i DDL mają 14 tabel aplikacji" "baza=$APP_TABLES DDL=$DDL_TABLES"
+fi
+
+# 94. Każda tabela ma klucz główny.
+NO_PK=$(dbq "SELECT COUNT(*) FROM information_schema.TABLES t
+    WHERE t.TABLE_SCHEMA = DATABASE()
+      AND NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS s
+                      WHERE s.TABLE_SCHEMA = t.TABLE_SCHEMA
+                        AND s.TABLE_NAME = t.TABLE_NAME
+                        AND s.INDEX_NAME = 'PRIMARY')")
+if [ "$NO_PK" = "0" ]; then
+    pass "94. każda tabela ma klucz główny"
+else
+    fail "94. każda tabela ma klucz główny" "tabele bez PK: $NO_PK"
+fi
+
+# 95. Kolumny *_id mają klucz obcy (poza polimorficznym admin_log.entity_id).
+NO_FK=$(dbq "SELECT COUNT(*) FROM information_schema.COLUMNS c
+    WHERE c.TABLE_SCHEMA = DATABASE()
+      AND c.COLUMN_NAME LIKE '%\\_id'
+      AND NOT EXISTS (SELECT 1 FROM information_schema.KEY_COLUMN_USAGE k
+                      WHERE k.TABLE_SCHEMA = c.TABLE_SCHEMA
+                        AND k.TABLE_NAME = c.TABLE_NAME
+                        AND k.COLUMN_NAME = c.COLUMN_NAME
+                        AND k.REFERENCED_TABLE_NAME IS NOT NULL)
+      AND NOT (c.TABLE_NAME = 'admin_log' AND c.COLUMN_NAME = 'entity_id')")
+if [ "$NO_FK" = "0" ]; then
+    pass "95. każda kolumna *_id ma klucz obcy (poza admin_log.entity_id)"
+else
+    fail "95. każda kolumna *_id ma klucz obcy" "bez FK: $NO_FK"
+fi
+
+# 96. Nagłówki bezpieczeństwa obecne na stronie publicznej.
+req GET "$BASE_URL/?page=home" >/dev/null
+if grep -qi '^x-content-type-options: nosniff' "$TMP/hdr" \
+   && grep -qi '^content-security-policy:' "$TMP/hdr" \
+   && grep -qi '^referrer-policy:' "$TMP/hdr"; then
+    pass "96. nagłówki bezpieczeństwa (CSP, nosniff, referrer) są wysyłane"
+else
+    fail "96. nagłówki bezpieczeństwa (CSP, nosniff, referrer) są wysyłane" "brak nagłówka"
+fi
+
 # --- testy wymagające przeglądarki lub restartu kontenera ----------------
 skip "Widok 500 przy błędnym DB_PASS" "wymaga restartu kontenera z innym DB_PASS (environment w compose); nie testujemy w tym przebiegu"
 skip "Wizualna ocena formularzy / responsywność / czytelność błędów" "wymaga przeglądarki — patrz tools/qa-manual.md"
