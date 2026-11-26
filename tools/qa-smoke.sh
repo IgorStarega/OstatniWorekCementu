@@ -804,7 +804,7 @@ dbq "DELETE FROM admin_log WHERE details LIKE '%Log Test%'" >/dev/null 2>&1
 
 # --- 39. Eksport CSV ------------------------------------------------------
 code=$(req GET "$BASE_URL/?page=admin-reservations-export" -b "$JAR_ADMIN" -c "$JAR_ADMIN")
-ctype=$(grep -i 'content-type' "$TMP/hdr" | head -1)
+ctype=$(grep -i '^content-type:' "$TMP/hdr" | head -1)
 if [ "$code" = "200" ] && printf '%s' "$ctype" | grep -qi 'csv'; then
     pass "39. eksport CSV -> 200 + Content-Type text/csv"
 else

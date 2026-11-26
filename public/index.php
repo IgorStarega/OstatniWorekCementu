@@ -13,6 +13,19 @@ ini_set('display_errors', $appEnv === 'prod' ? '0' : '1');
 ini_set('log_errors', '1');
 error_reporting(E_ALL);
 
+// Nagłówki bezpieczeństwa dla każdej odpowiedzi dynamicznej. CSP dopuszcza
+// wyłącznie zasoby z własnego serwera; style inline są potrzebne dla pasków
+// postępu w panelu, ale skryptów inline w projekcie nie ma.
+if (!headers_sent()) {
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+    header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; "
+        . "style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; "
+        . "connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'");
+}
+
 // Definicje funkcji i klas ładujemy przed konfiguracją i handlerem błędów,
 // żeby widok 500 (korzystający z layoutu) działał nawet gdy config.php rzuci wyjątek.
 require BASE_PATH . '/app/helpers/csrf.php';
